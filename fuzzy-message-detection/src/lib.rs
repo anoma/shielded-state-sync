@@ -96,13 +96,13 @@ pub fn flag_test(dsk: &DetectionKey, flag_cipher: &FlagCiphertext) -> bool {
 
     let w = RISTRETTO_BASEPOINT_POINT * &m + flag_cipher.u * &flag_cipher.y;
 
-    for (xi, ci) in dsk.keys.iter().zip(flag_cipher.c.iter()) {
+    for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
         let mut hasher = Sha256::new();
         hasher.update(flag_cipher.u.compress().to_bytes());
         hasher.update((flag_cipher.u * xi).compress().to_bytes());
         hasher.update(w.compress().to_bytes());
         let k_i = hasher.finalize().as_slice()[0] & 1u8;
-        if k_i == *ci {
+        if k_i == flag_cipher.c[*index] {
             return false;
         }
     }
@@ -132,8 +132,10 @@ mod tests {
         let gamma = 5;
         let sk = SecretKey::generate_keys(gamma, &mut csprng);
         let pk = sk.generate_public_key();
-        let flag = FlagCiphertext::generate_flag(&pk, &mut csprng);
-        let dk = sk.extract(&[0, 2, 4]);
-        assert!(flag_test(&dk, &flag));
+        for _i in 0..10 {
+            let flag = FlagCiphertext::generate_flag(&pk, &mut csprng);
+            let dk = sk.extract(&[0, 2, 4]);
+            assert!(flag_test(&dk, &flag));
+        }
     }
 }

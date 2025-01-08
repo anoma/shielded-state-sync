@@ -1,141 +1,47 @@
-use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
-};
+pub mod fmd2;
 use rand_core::{CryptoRng, RngCore};
-use sha2::{Digest, Sha256, Sha512};
 
-#[derive(Debug, Clone)]
-pub struct SecretKey {
-    pub gamma: usize,
-    pub keys: Vec<Scalar>,
+/// A trait for a Fuzzy Message Detection (FMD) scheme with restricted false positive rates.
+///
+/// We slightly modify the signature of [extract](FmdScheme::extract): detection keys are any ordered subset of the γ secret keys, along with their indices. This means that an implementation of [test](FmdScheme::test) should decrypt the flag ciphertexts in the positions given by those indices.
+pub trait FmdScheme {
+
+    type PublicKey;
+    type SecretKey;
+    type DetectionKey;
+    type FlagCiphertexts;
+    
+    /// Generate keys according to the false positive rate set.
+    fn generate_keys<R: RngCore + CryptoRng>(rates: &RestrictedRateSet, rng: &mut R) -> (Self::PublicKey,Self::SecretKey);
+
+    fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts;
+
+    /// The number of (secret key) indices gives the chosen false positive rate.
+    /// Sould return `None` if the number of indices is larger than the 
+    /// γ parameter of the [RestrictedRateSet] used in 
+    /// [generate_keys](FmdScheme::generate_keys).
+    fn extract(sk: &Self::SecretKey, indices: &[usize]) -> Option<Self::DetectionKey>;
+
+    fn test(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool;
 }
 
-#[derive(Debug, Clone)]
-pub struct PublicKey {
-    pub keys: Vec<RistrettoPoint>,
-}
+/// For given integer γ > 0, the set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
+pub struct RestrictedRateSet(usize);
 
-#[derive(Debug, Clone)]
-pub struct DetectionKey {
-    pub indices: Vec<usize>,
-    pub keys: Vec<Scalar>,
-}
-
-impl SecretKey {
-    pub fn generate_keys<R: RngCore + CryptoRng>(gamma: usize, rng: &mut R) -> Self {
-        let keys = (0..gamma).map(|_| Scalar::random(rng)).collect();
-
-        Self { gamma, keys }
+impl RestrictedRateSet {
+    pub fn new(gamma: usize) -> Self {
+        Self(gamma)
     }
 
-    pub fn extract(&self, indices: &[usize]) -> DetectionKey {
-        for &i in indices {
-            if i >= self.keys.len() {
-                panic!("Index out of bounds");
-            }
-        }
-        let keys = indices.iter().map(|&i| self.keys[i]).collect();
-        DetectionKey {
-            indices: indices.to_vec(),
-            keys,
-        }
-    }
-
-    pub fn generate_public_key(&self) -> PublicKey {
-        let keys = self
-            .keys
-            .iter()
-            .map(|k| k * &RISTRETTO_BASEPOINT_POINT)
-            .collect();
-        PublicKey { keys }
-    }
+    /// Returns the γ parameter
+    pub fn gamma(&self) -> usize {
+        self.0
+    } 
 }
 
-#[derive(Debug, Clone)]
-pub struct FlagCiphertext {
-    pub u: RistrettoPoint,
-    pub y: Scalar,
-    pub c: Vec<u8>,
-}
-
-impl FlagCiphertext {
-    pub fn generate_flag<R: RngCore + CryptoRng>(pk: &PublicKey, rng: &mut R) -> Self {
-        let r = Scalar::random(rng);
-        let z = Scalar::random(rng);
-        let u = RISTRETTO_BASEPOINT_POINT * &r;
-        let w = RISTRETTO_BASEPOINT_POINT * &z;
-
-        let c: Vec<u8> = pk
-            .keys
-            .iter()
-            .map(|k| {
-                let mut hasher = Sha256::new();
-                hasher.update(u.compress().to_bytes());
-                hasher.update((k * &r).compress().to_bytes());
-                hasher.update(w.compress().to_bytes());
-                let k_i = hasher.finalize().as_slice()[0] & 1u8;
-                k_i ^ 1u8
-            })
-            .collect();
-
-        let mut m_bytes = u.compress().to_bytes().to_vec();
-        m_bytes.extend_from_slice(&c);
-        let m = Scalar::hash_from_bytes::<Sha512>(&m_bytes);
-
-        let r_inv = r.invert();
-        let y = (z - m) * r_inv;
-
-        Self { u, y, c }
-    }
-}
-
-pub fn flag_test(dsk: &DetectionKey, flag_cipher: &FlagCiphertext) -> bool {
-    let mut m_bytes = flag_cipher.u.compress().to_bytes().to_vec();
-    m_bytes.extend_from_slice(&flag_cipher.c);
-    let m = Scalar::hash_from_bytes::<Sha512>(&m_bytes);
-
-    let w = RISTRETTO_BASEPOINT_POINT * &m + flag_cipher.u * &flag_cipher.y;
-
-    for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
-        let mut hasher = Sha256::new();
-        hasher.update(flag_cipher.u.compress().to_bytes());
-        hasher.update((flag_cipher.u * xi).compress().to_bytes());
-        hasher.update(w.compress().to_bytes());
-        let k_i = hasher.finalize().as_slice()[0] & 1u8;
-        if k_i == flag_cipher.c[*index] {
-            return false;
-        }
-    }
-    true
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_flag_test() {
-        let mut csprng = rand_core::OsRng;
-
-        let gamma = 5;
-        let sk = SecretKey::generate_keys(gamma, &mut csprng);
-        let pk = sk.generate_public_key();
-        let flag = FlagCiphertext::generate_flag(&pk, &mut csprng);
-        let dk = sk.extract(&(0..gamma).collect::<Vec<_>>());
-        assert!(flag_test(&dk, &flag));
-    }
-
-    #[test]
-    fn test_flag_test_with_partial_detection_key() {
-        let mut csprng = rand_core::OsRng;
-
-        let gamma = 5;
-        let sk = SecretKey::generate_keys(gamma, &mut csprng);
-        let pk = sk.generate_public_key();
-        for _i in 0..10 {
-            let flag = FlagCiphertext::generate_flag(&pk, &mut csprng);
-            let dk = sk.extract(&[0, 2, 4]);
-            assert!(flag_test(&dk, &flag));
-        }
-    }
-}
+/// A marker trait used to indicate that 
+/// an implementation of trait [FmdScheme] is IND-CCA secure.
+/// 
+/// Only IND-CCA secure schemes should be used, as they ensure
+/// generated ciphertext flags are non-malleable.
+pub trait CcaSecure {}

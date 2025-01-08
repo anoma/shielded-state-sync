@@ -1,3 +1,5 @@
+//! The FMD2 scheme specified in Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
+
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
@@ -68,31 +70,84 @@ impl FlagCiphertexts {
         let u = RISTRETTO_BASEPOINT_POINT * &r;
         let w = RISTRETTO_BASEPOINT_POINT * &z;
 
-        let c: Vec<u8> = pk
+        let bit_ciphertexts: Vec<bool> = pk
             .keys
             .iter()
-            .map(|k| {
-                let mut hasher = Sha256::new();
-                hasher.update(u.compress().to_bytes());
-                hasher.update((k * &r).compress().to_bytes());
-                hasher.update(w.compress().to_bytes());
-                let k_i = hasher.finalize().as_slice()[0] & 1u8;
-                k_i ^ 1u8
+            .map(|pk_i| {
+                let k_i = RandomOracle::h(&u, &(pk_i * &r), &w);
+                let bit_ciphertext_i = !k_i; // Encrypt bit 1 with hashed mask k_1.
+                bit_ciphertext_i
             })
             .collect();
 
-        let mut m_bytes = u.compress().to_bytes().to_vec();
-        m_bytes.extend_from_slice(&c);
-        let m = Scalar::hash_from_bytes::<Sha512>(&m_bytes);
+        let m = RandomOracle::g(&u, &bit_ciphertexts);
 
         let r_inv = r.invert();
         let y = (z - m) * r_inv;
 
-        Self { u, y, c }
+        let c = FlagCiphertexts::to_bytes(&bit_ciphertexts);
+
+        Self { u, y, c}
+    }
+
+    // Compressed representation of the γ bit-ciphertexts of a FlagCiphertext.
+    fn to_bytes(bit_ciphertexts: &[bool]) -> Vec<u8> {
+        
+        let c: Vec<u8> = bit_ciphertexts
+            .chunks(8)
+            .map(|bits| 
+                {
+                    let mut byte = 0u8;
+                    for (i,bit) in bits.iter().enumerate() {
+                        if *bit { byte ^= 1u8 << i }
+                    }
+                    byte
+                })
+            .collect();
+        c
+    }
+
+    // Uncompress the inner bit-ciphertexts of this FlagCiphertext.
+    fn to_bits(&self) -> Vec<bool> {
+
+        let mut bit_ciphertexts:Vec<bool> = Vec::new();
+        for byte in self.c.iter() {        
+            for i in 0..8 {
+                bit_ciphertexts.push(1u8 == byte >> i & 1u8);
+            }
+        }
+        
+        bit_ciphertexts
     }
 }
 
-/// The FMD2 scheme specified in Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
+// Random oracles H and G from Fig. 3 of the FMD paper.
+struct RandomOracle;
+impl RandomOracle {
+
+    // H is instantiated with SHA256
+    fn h(u: &RistrettoPoint, ddh_mask: &RistrettoPoint, w: &RistrettoPoint) -> bool {
+
+        let mut hasher = Sha256::new();
+
+        hasher.update(u.compress().to_bytes());
+        hasher.update(ddh_mask.compress().to_bytes());
+        hasher.update(w.compress().to_bytes());
+        
+        let k_i_byte = hasher.finalize().as_slice()[0] & 1u8;
+
+        k_i_byte == 1u8
+    }
+
+    // G is instantiated with SHA512
+    fn g(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar {
+        
+        let mut m_bytes = u.compress().to_bytes().to_vec();
+        m_bytes.extend_from_slice(&FlagCiphertexts::to_bytes(bit_ciphertexts));
+        
+        Scalar::hash_from_bytes::<Sha512>(&m_bytes)
+    }
+}
 pub struct Fmd2;
 
 impl FmdScheme for Fmd2 {
@@ -126,24 +181,20 @@ impl FmdScheme for Fmd2 {
     }
 
     fn test(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
-        let mut m_bytes = flag_ciphers.u.compress().to_bytes().to_vec();
-    m_bytes.extend_from_slice(&flag_ciphers.c);
-    let m = Scalar::hash_from_bytes::<Sha512>(&m_bytes);
+        
+        let u = flag_ciphers.u;
+        let bit_ciphertexts = flag_ciphers.to_bits();
+        let m = RandomOracle::g(&u, &bit_ciphertexts);
+        let w = RISTRETTO_BASEPOINT_POINT * &m + flag_ciphers.u * &flag_ciphers.y;
 
-    let w = RISTRETTO_BASEPOINT_POINT * &m + flag_ciphers.u * &flag_ciphers.y;
-
-    for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
-        let mut hasher = Sha256::new();
-        hasher.update(flag_ciphers.u.compress().to_bytes());
-        hasher.update((flag_ciphers.u * xi).compress().to_bytes());
-        hasher.update(w.compress().to_bytes());
-        let k_i = hasher.finalize().as_slice()[0] & 1u8;
-        if k_i == flag_ciphers.c[*index] {
-            return false;
+        for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
+            let k_i = RandomOracle::h(&u, &(u * xi), &w);
+            if k_i == bit_ciphertexts[*index] {
+                return false; 
+            }
         }
-    }
 
-    true    
+        true    
     }
 }
 
@@ -173,7 +224,7 @@ mod tests {
         let (pk,sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
         for _i in 0..10 {
             let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
-            let dk = <Fmd2 as FmdScheme>::extract(&sk,&(0..rates.gamma()).collect::<Vec<_>>());
+            let dk = <Fmd2 as FmdScheme>::extract(&sk,&[0, 2, 4]);
             assert!(<Fmd2 as FmdScheme>::test(&dk.unwrap(), &flag_cipher));
         }
     }

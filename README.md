@@ -1,1 +1,1 @@
-# private-state-sync
+# shielded-state-sync

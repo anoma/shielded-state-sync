@@ -224,7 +224,8 @@ mod tests {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);
-        let (_pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+        let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+        let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
 
         assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 0, 1]).is_none());
         assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 1, 2, 3, 4, 5, 6]).is_none());

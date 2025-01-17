@@ -1,3 +1,4 @@
+extern crate alloc;
 pub mod fmd2;
 use rand_core::{CryptoRng, RngCore};
 

@@ -1,6 +1,0 @@
-[workspace]
-members = [
-    "fuzzy-message-detection",
-]
-
-resolver = "2"

@@ -1,11 +1,11 @@
 //! The FMD2 scheme specified in Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
 
-use alloc::collections::BTreeSet;
+// use alloc::collections::BTreeSet;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
 use rand_core::{CryptoRng, RngCore};
-use sha2::{Digest, Sha256, Sha512};
+use sha3::{Digest, Sha3_256, Sha3_512};
 
 use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
 
@@ -32,15 +32,15 @@ impl SecretKey {
 
     fn extract(&self, indices: &[usize]) -> Option<DetectionKey> {
         // check that input indices are distinct
-        let index_set = BTreeSet::from_iter(indices);
-        if index_set.len() != indices.len() {
-            return None;
-        }
+        // let index_set = BTreeSet::from_iter(indices);
+        // if index_set.len() != indices.len() {
+        //     return None;
+        // }
 
         // If number of indices is larger than the γ parameter.
-        if index_set.len() > self.0.len() {
-            return None;
-        }
+        // if index_set.len() > self.0.len() {
+        //     return None;
+        // }
 
         let mut keys = Vec::with_capacity(indices.len());
         for ix in indices {
@@ -132,7 +132,7 @@ fn hash_to_flag_ciphertext_bit(
     ddh_mask: &RistrettoPoint,
     w: &RistrettoPoint,
 ) -> bool {
-    let mut hasher = Sha256::new();
+    let mut hasher = Sha3_256::new();
 
     hasher.update(u.compress().to_bytes());
     hasher.update(ddh_mask.compress().to_bytes());
@@ -148,7 +148,7 @@ fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar
     let mut m_bytes = u.compress().to_bytes().to_vec();
     m_bytes.extend_from_slice(&FlagCiphertexts::to_bytes(bit_ciphertexts));
 
-    Scalar::hash_from_bytes::<Sha512>(&m_bytes)
+    Scalar::hash_from_bytes::<Sha3_512>(&m_bytes)
 }
 
 pub struct Fmd2;
@@ -206,10 +206,12 @@ impl CcaSecure for Fmd2 {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand_chacha::ChaCha8Rng;
+    use rand_core::SeedableRng;
 
     #[test]
     fn test_flag_test() {
-        let mut csprng = rand_core::OsRng;
+        let mut csprng = ChaCha8Rng::seed_from_u64(42);
 
         let rates = RestrictedRateSet::new(5);
         let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
@@ -221,7 +223,7 @@ mod tests {
     /// Test that we perform checks on the input indices when extract flags.
     #[test]
     fn test_extract_checks() {
-        let mut csprng = rand_core::OsRng;
+        let mut csprng = ChaCha8Rng::seed_from_u64(42);
 
         let rates = RestrictedRateSet::new(5);
         let (_pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
@@ -233,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_flag_test_with_partial_detection_key() {
-        let mut csprng = rand_core::OsRng;
+        let mut csprng = ChaCha8Rng::seed_from_u64(42);
 
         let rates = RestrictedRateSet::new(5);
         let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);

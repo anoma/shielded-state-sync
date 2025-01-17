@@ -1,13 +1,13 @@
 //! The FMD2 scheme specified in Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
 
+use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
 use alloc::collections::BTreeSet;
-use std::hint::black_box;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256, Sha512};
-use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
+use std::hint::black_box;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretKey(pub Vec<Scalar>);
@@ -116,7 +116,7 @@ impl FlagCiphertexts {
         let mut bit_ciphertexts: Vec<u8> = Vec::with_capacity(self.c.len() * 8);
         for byte in self.c.iter() {
             for i in 0..8 {
-                bit_ciphertexts.push( byte >> i & 1u8);
+                bit_ciphertexts.push(byte >> i & 1u8);
             }
         }
 

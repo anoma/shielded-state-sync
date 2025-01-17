@@ -12,15 +12,18 @@ use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
 
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecretKey(Vec<Scalar>);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PublicKey {
     keys: Vec<RistrettoPoint>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DetectionKey {
     indices: Vec<usize>,
     keys: Vec<Scalar>,
@@ -57,7 +60,8 @@ impl SecretKey {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlagCiphertexts {
     u: RistrettoPoint,
     y: Scalar,

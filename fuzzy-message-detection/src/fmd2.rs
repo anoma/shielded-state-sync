@@ -262,6 +262,40 @@ pub struct FlagCiphertexts {
 }
 
 impl FlagCiphertexts {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut output = Vec::with_capacity(32 + 32 + self.c.0.len());
+
+        output.extend_from_slice(&self.u.compress().to_bytes());
+        output.extend_from_slice(&self.y.to_bytes());
+        output.extend_from_slice(&self.c.0);
+
+        output
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() < 64 {
+            return None;
+        }
+
+        let u = {
+            let mut point = CompressedRistretto([0u8; 32]);
+            point.0.copy_from_slice(&bytes[..32]);
+            point.decompress()?
+        };
+
+        let y = {
+            let mut encoded_scalar = [0u8; 32];
+            encoded_scalar.copy_from_slice(&bytes[32..64]);
+            Scalar::from_bytes_mod_order(encoded_scalar)
+        };
+
+        Some(Self {
+            u,
+            y,
+            c: CompressedCiphertext(bytes[64..].to_vec()),
+        })
+    }
+
     fn generate_flag<R: RngCore + CryptoRng>(pk: &PublicKey, rng: &mut R) -> Self {
         let r = Scalar::random(rng);
         let z = Scalar::random(rng);

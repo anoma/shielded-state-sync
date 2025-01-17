@@ -1,4 +1,7 @@
+#![cfg_attr(not(test), no_std)]
+
 extern crate alloc;
+
 pub mod fmd2;
 pub use fmd2::SecretKey;
 use rand_core::{CryptoRng, RngCore};

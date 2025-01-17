@@ -1,7 +1,10 @@
 //! The FMD2 scheme specified in Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
 
-use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
 use alloc::collections::BTreeSet;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::hint::black_box;
+
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
@@ -9,7 +12,8 @@ use curve25519_dalek::{
 };
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256, Sha512};
-use std::hint::black_box;
+
+use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretKey(pub Vec<Scalar>);

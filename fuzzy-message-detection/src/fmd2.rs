@@ -212,11 +212,49 @@ impl SecretKey {
     }
 }
 
+/// Compressed representation of the γ bit-ciphertexts of a [`FlagCiphertext`].
+#[derive(Debug, Clone)]
+struct CompressedCiphertext(Vec<u8>);
+
+impl CompressedCiphertext {
+    fn decompress(&self) -> Ciphertext {
+        let mut bit_ciphertexts = Vec::with_capacity(self.0.len() * 8);
+        for byte in self.0.iter() {
+            for i in 0..8 {
+                bit_ciphertexts.push(byte >> i & 1u8);
+            }
+        }
+
+        Ciphertext(bit_ciphertexts)
+    }
+}
+
+/// Decompressed inner bit-ciphertexts of a [`FlagCiphertext`].
+#[derive(Debug, Clone)]
+struct Ciphertext(Vec<u8>);
+
+impl Ciphertext {
+    fn compress(&self) -> CompressedCiphertext {
+        CompressedCiphertext(
+            self.0
+                .chunks(8)
+                .map(|bits| {
+                    let mut byte = 0u8;
+                    for (i, bit) in bits.iter().enumerate() {
+                        byte ^= bit << i
+                    }
+                    byte
+                })
+                .collect(),
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FlagCiphertexts {
     u: RistrettoPoint,
     y: Scalar,
-    c: Vec<u8>,
+    c: CompressedCiphertext,
 }
 
 impl FlagCiphertexts {
@@ -226,50 +264,23 @@ impl FlagCiphertexts {
         let u = RISTRETTO_BASEPOINT_POINT * r;
         let w = RISTRETTO_BASEPOINT_POINT * z;
 
-        let bit_ciphertexts: Vec<u8> = pk
-            .keys
-            .iter()
-            .map(|pk_i| {
-                let k_i = hash_to_flag_ciphertext_bit(&u, &(pk_i * r), &w);
-                k_i ^ 1u8 // Encrypt bit 1 with hashed mask k_i.
-            })
-            .collect();
+        let bit_ciphertexts = Ciphertext(
+            pk.keys
+                .iter()
+                .map(|pk_i| {
+                    let k_i = hash_to_flag_ciphertext_bit(&u, &(pk_i * r), &w);
+                    k_i ^ 1u8 // Encrypt bit 1 with hashed mask k_i.
+                })
+                .collect(),
+        );
 
-        let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
+        let c = bit_ciphertexts.compress();
+        let m = hash_flag_ciphertexts(&u, &c);
 
         let r_inv = r.invert();
         let y = (z - m) * r_inv;
 
-        let c = FlagCiphertexts::to_bytes(&bit_ciphertexts);
-
         Self { u, y, c }
-    }
-
-    /// Compressed representation of the γ bit-ciphertexts of a FlagCiphertext.
-    fn to_bytes(bit_ciphertexts: &[u8]) -> Vec<u8> {
-        let c: Vec<u8> = bit_ciphertexts
-            .chunks(8)
-            .map(|bits| {
-                let mut byte = 0u8;
-                for (i, bit) in bits.iter().enumerate() {
-                    byte ^= bit << i
-                }
-                byte
-            })
-            .collect();
-        c
-    }
-
-    /// Decompress the inner bit-ciphertexts of this FlagCiphertext.
-    fn to_bits(&self) -> Vec<u8> {
-        let mut bit_ciphertexts: Vec<u8> = Vec::with_capacity(self.c.len() * 8);
-        for byte in self.c.iter() {
-            for i in 0..8 {
-                bit_ciphertexts.push(byte >> i & 1u8);
-            }
-        }
-
-        bit_ciphertexts
     }
 }
 
@@ -289,11 +300,16 @@ fn hash_to_flag_ciphertext_bit(
 }
 
 /// This is the hash G from Fig.3 of the FMD paper, instantiated with SHA512.
-fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[u8]) -> Scalar {
-    let mut m_bytes = u.compress().to_bytes().to_vec();
-    m_bytes.extend_from_slice(&FlagCiphertexts::to_bytes(bit_ciphertexts));
+fn hash_flag_ciphertexts(
+    u: &RistrettoPoint,
+    CompressedCiphertext(ciphertexts): &CompressedCiphertext,
+) -> Scalar {
+    let mut digest = Sha512::new();
 
-    Scalar::hash_from_bytes::<Sha512>(&m_bytes)
+    digest.update(u.compress().to_bytes());
+    digest.update(ciphertexts);
+
+    Scalar::from_hash(digest)
 }
 
 pub struct Fmd2;
@@ -332,13 +348,13 @@ impl FmdScheme for Fmd2 {
 
     fn test(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
         let u = flag_ciphers.u;
-        let bit_ciphertexts = flag_ciphers.to_bits();
-        let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
+        let bit_ciphertexts = flag_ciphers.c.decompress();
+        let m = hash_flag_ciphertexts(&u, &flag_ciphers.c);
         let w = RISTRETTO_BASEPOINT_POINT * m + flag_ciphers.u * flag_ciphers.y;
         let mut success = 1u8;
         for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
             let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
-            success = black_box(success & k_i ^ bit_ciphertexts[*index])
+            success = black_box(success & k_i ^ bit_ciphertexts.0[*index])
         }
 
         success == 1u8

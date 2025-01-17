@@ -1,16 +1,16 @@
 //! The FMD2 scheme specified in Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
 
 use alloc::collections::BTreeSet;
+use std::hint::black_box;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256, Sha512};
-
 use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
 
-#[derive(Debug, Clone)]
-pub struct SecretKey(Vec<Scalar>);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecretKey(pub Vec<Scalar>);
 
 #[derive(Debug, Clone)]
 pub struct PublicKey {
@@ -77,12 +77,12 @@ impl FlagCiphertexts {
         let u = RISTRETTO_BASEPOINT_POINT * r;
         let w = RISTRETTO_BASEPOINT_POINT * z;
 
-        let bit_ciphertexts: Vec<bool> = pk
+        let bit_ciphertexts: Vec<u8> = pk
             .keys
             .iter()
             .map(|pk_i| {
                 let k_i = hash_to_flag_ciphertext_bit(&u, &(pk_i * r), &w);
-                !k_i // Encrypt bit 1 with hashed mask k_i.
+                k_i ^ 1u8 // Encrypt bit 1 with hashed mask k_i.
             })
             .collect();
 
@@ -97,15 +97,13 @@ impl FlagCiphertexts {
     }
 
     /// Compressed representation of the γ bit-ciphertexts of a FlagCiphertext.
-    fn to_bytes(bit_ciphertexts: &[bool]) -> Vec<u8> {
+    fn to_bytes(bit_ciphertexts: &[u8]) -> Vec<u8> {
         let c: Vec<u8> = bit_ciphertexts
             .chunks(8)
             .map(|bits| {
                 let mut byte = 0u8;
                 for (i, bit) in bits.iter().enumerate() {
-                    if *bit {
-                        byte ^= 1u8 << i
-                    }
+                    byte ^= bit << i
                 }
                 byte
             })
@@ -114,11 +112,11 @@ impl FlagCiphertexts {
     }
 
     /// Decompress the inner bit-ciphertexts of this FlagCiphertext.
-    fn to_bits(&self) -> Vec<bool> {
-        let mut bit_ciphertexts: Vec<bool> = Vec::new();
+    fn to_bits(&self) -> Vec<u8> {
+        let mut bit_ciphertexts: Vec<u8> = Vec::with_capacity(self.c.len() * 8);
         for byte in self.c.iter() {
             for i in 0..8 {
-                bit_ciphertexts.push(1u8 == byte >> i & 1u8);
+                bit_ciphertexts.push( byte >> i & 1u8);
             }
         }
 
@@ -131,20 +129,18 @@ fn hash_to_flag_ciphertext_bit(
     u: &RistrettoPoint,
     ddh_mask: &RistrettoPoint,
     w: &RistrettoPoint,
-) -> bool {
+) -> u8 {
     let mut hasher = Sha256::new();
 
     hasher.update(u.compress().to_bytes());
     hasher.update(ddh_mask.compress().to_bytes());
     hasher.update(w.compress().to_bytes());
 
-    let k_i_byte = hasher.finalize().as_slice()[0] & 1u8;
-
-    k_i_byte == 1u8
+    hasher.finalize().as_slice()[0] & 1u8
 }
 
 /// This is the hash G from Fig.3 of the FMD paper, instantiated with SHA512.
-fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar {
+fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[u8]) -> Scalar {
     let mut m_bytes = u.compress().to_bytes().to_vec();
     m_bytes.extend_from_slice(&FlagCiphertexts::to_bytes(bit_ciphertexts));
 
@@ -190,13 +186,13 @@ impl FmdScheme for Fmd2 {
         let bit_ciphertexts = flag_ciphers.to_bits();
         let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
         let w = RISTRETTO_BASEPOINT_POINT * m + flag_ciphers.u * flag_ciphers.y;
-        let mut success = true;
+        let mut success = 1u8;
         for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
             let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
-            success = success && k_i != bit_ciphertexts[*index]
+            success = black_box(success & k_i ^ bit_ciphertexts[*index])
         }
 
-        success
+        success == 1u8
     }
 }
 
@@ -243,5 +239,21 @@ mod tests {
             let dk = <Fmd2 as FmdScheme>::extract(&sk, &[0, 2, 4]);
             assert!(<Fmd2 as FmdScheme>::test(&dk.unwrap(), &flag_cipher));
         }
+    }
+
+    /// Test when test fails
+    #[test]
+    fn test_test_fail() {
+        let mut csprng = rand_core::OsRng;
+
+        let rates = RestrictedRateSet::new(5);
+        let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+
+        let mut flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
+        let mut bits = flag_cipher.to_bits();
+        bits[1] ^= 1u8;
+        flag_cipher.c = FlagCiphertexts::to_bytes(&bits);
+        let dk = <Fmd2 as FmdScheme>::extract(&sk, &[0, 1, 2, 3, 4]);
+        assert!(!<Fmd2 as FmdScheme>::test(&dk.unwrap(), &flag_cipher));
     }
 }

@@ -1,5 +1,8 @@
 //! The FMD2 scheme specified in Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use alloc::collections::BTreeSet;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -16,6 +19,7 @@ use sha2::{Digest, Sha256, Sha512};
 use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecretKey(pub Vec<Scalar>);
 
 impl From<Vec<Scalar>> for SecretKey {
@@ -100,6 +104,7 @@ impl SecretKey {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PublicKey {
     keys: Vec<RistrettoPoint>,
 }
@@ -149,6 +154,7 @@ impl PublicKey {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DetectionKey {
     indices: Vec<usize>,
     keys: Vec<Scalar>,
@@ -218,6 +224,7 @@ impl DetectionKey {
 
 /// Compressed representation of the γ bit-ciphertexts of a [`FlagCiphertext`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 struct CompressedCiphertext(Vec<u8>);
 
 impl CompressedCiphertext {
@@ -235,6 +242,7 @@ impl CompressedCiphertext {
 
 /// Decompressed inner bit-ciphertexts of a [`FlagCiphertext`].
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 struct Ciphertext(Vec<u8>);
 
 impl Ciphertext {
@@ -255,6 +263,7 @@ impl Ciphertext {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlagCiphertexts {
     u: RistrettoPoint,
     y: Scalar,

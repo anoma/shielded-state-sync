@@ -15,8 +15,32 @@ use curve25519_dalek::{
 };
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256, Sha512};
+use thiserror::Error;
 
 use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
+
+fn check_key_size(
+    expected_key_size: usize,
+    got_data_len: usize,
+) -> Result<(), DeserializationError> {
+    if got_data_len % expected_key_size == 0 {
+        Ok(())
+    } else {
+        Err(DeserializationError::InvalidSize { expected_key_size })
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum DeserializationError {
+    #[error("Expected data size to be a multiple of {expected_key_size} bytes")]
+    InvalidSize { expected_key_size: usize },
+    #[error("Got non-canonical representation of scalar")]
+    NonCanonicalScalar,
+    #[error("Got invalid representation of ristretto point")]
+    InvalidRistrettoPoint,
+    #[error("Flag ciphertext too short")]
+    ShortFlagCiphertext,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -38,12 +62,10 @@ impl SecretKey {
         self.to_bytes().into_flattened()
     }
 
-    pub fn from_bytes_mod_order_flattened(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() % 32 != 0 {
-            return None;
-        }
+    pub fn from_bytes_mod_order_flattened(bytes: &[u8]) -> Result<Self, DeserializationError> {
+        check_key_size(32, bytes.len())?;
 
-        Some(Self::from_bytes_mod_order(bytes.chunks(32).map(
+        Ok(Self::from_bytes_mod_order(bytes.chunks(32).map(
             |dyn_chunk| {
                 let mut chunk = [0u8; 32];
                 chunk.copy_from_slice(dyn_chunk);
@@ -62,6 +84,29 @@ impl SecretKey {
                 .map(Scalar::from_bytes_mod_order)
                 .collect(),
         )
+    }
+
+    pub fn from_canonical_bytes_flattened(bytes: &[u8]) -> Result<Self, DeserializationError> {
+        check_key_size(32, bytes.len())?;
+
+        Self::from_canonical_bytes(bytes.chunks(32).map(|dyn_chunk| {
+            let mut chunk = [0u8; 32];
+            chunk.copy_from_slice(dyn_chunk);
+            chunk
+        }))
+    }
+
+    pub fn from_canonical_bytes<I>(seeds: I) -> Result<Self, DeserializationError>
+    where
+        I: IntoIterator<Item = [u8; 32]>,
+    {
+        Ok(Self(
+            seeds
+                .into_iter()
+                .map(|encoded_scalar| Scalar::from_canonical_bytes(encoded_scalar).into())
+                .collect::<Option<Vec<_>>>()
+                .ok_or(DeserializationError::NonCanonicalScalar)?,
+        ))
     }
 
     fn generate_keys<R: RngCore + CryptoRng>(gamma: usize, rng: &mut R) -> Self {
@@ -128,10 +173,8 @@ impl PublicKey {
         self.to_bytes().into_flattened()
     }
 
-    pub fn from_bytes_flattened(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() % 32 != 0 {
-            return None;
-        }
+    pub fn from_bytes_flattened(bytes: &[u8]) -> Result<Self, DeserializationError> {
+        check_key_size(32, bytes.len())?;
 
         Self::from_bytes(bytes.chunks(32).map(|dyn_chunk| {
             let mut chunk = [0u8; 32];
@@ -140,15 +183,16 @@ impl PublicKey {
         }))
     }
 
-    pub fn from_bytes<I>(public_keys: I) -> Option<Self>
+    pub fn from_bytes<I>(public_keys: I) -> Result<Self, DeserializationError>
     where
         I: IntoIterator<Item = [u8; 32]>,
     {
-        Some(Self {
+        Ok(Self {
             keys: public_keys
                 .into_iter()
                 .map(|key| CompressedRistretto(key).decompress())
-                .collect::<Option<Vec<_>>>()?,
+                .collect::<Option<Vec<_>>>()
+                .ok_or(DeserializationError::InvalidRistrettoPoint)?,
         })
     }
 }
@@ -185,10 +229,8 @@ impl DetectionKey {
         self.to_bytes().into_flattened()
     }
 
-    pub fn from_bytes_flattened(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() % 40 != 0 {
-            return None;
-        }
+    pub fn from_bytes_flattened(bytes: &[u8]) -> Result<Self, DeserializationError> {
+        check_key_size(40, bytes.len())?;
 
         Self::from_bytes(bytes.chunks(40).map(|dyn_chunk| {
             let mut chunk = [0u8; 40];
@@ -197,28 +239,28 @@ impl DetectionKey {
         }))
     }
 
-    pub fn from_bytes<I>(bytes: I) -> Option<Self>
+    pub fn from_bytes<I>(bytes: I) -> Result<Self, DeserializationError>
     where
         I: IntoIterator<Item = [u8; 40]>,
     {
-        let (indices, keys) =
-            bytes
-                .into_iter()
-                .try_fold((vec![], vec![]), |(mut indices, mut keys), chunk| {
-                    indices.push({
-                        let mut encoded_index = [0u8; 8];
-                        encoded_index.copy_from_slice(&chunk[..8]);
-                        usize::try_from(u64::from_le_bytes(encoded_index)).ok()?
-                    });
-                    keys.push({
-                        let mut encoded_scalar = [0u8; 32];
-                        encoded_scalar.copy_from_slice(&chunk[8..]);
-                        Scalar::from_bytes_mod_order(encoded_scalar)
-                    });
-                    Some((indices, keys))
-                })?;
+        let (indices, keys) = bytes
+            .into_iter()
+            .try_fold((vec![], vec![]), |(mut indices, mut keys), chunk| {
+                indices.push({
+                    let mut encoded_index = [0u8; 8];
+                    encoded_index.copy_from_slice(&chunk[..8]);
+                    usize::try_from(u64::from_le_bytes(encoded_index)).ok()?
+                });
+                keys.push({
+                    let mut encoded_scalar = [0u8; 32];
+                    encoded_scalar.copy_from_slice(&chunk[8..]);
+                    Option::<_>::from(Scalar::from_canonical_bytes(encoded_scalar))?
+                });
+                Some((indices, keys))
+            })
+            .ok_or(DeserializationError::NonCanonicalScalar)?;
 
-        Some(Self { indices, keys })
+        Ok(Self { indices, keys })
     }
 }
 
@@ -281,24 +323,27 @@ impl FlagCiphertexts {
         output
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, DeserializationError> {
         if bytes.len() < 64 {
-            return None;
+            return Err(DeserializationError::ShortFlagCiphertext);
         }
 
         let u = {
             let mut point = CompressedRistretto([0u8; 32]);
             point.0.copy_from_slice(&bytes[..32]);
-            point.decompress()?
+            point
+                .decompress()
+                .ok_or(DeserializationError::InvalidRistrettoPoint)?
         };
 
         let y = {
             let mut encoded_scalar = [0u8; 32];
             encoded_scalar.copy_from_slice(&bytes[32..64]);
-            Scalar::from_bytes_mod_order(encoded_scalar)
+            Option::<_>::from(Scalar::from_canonical_bytes(encoded_scalar))
+                .ok_or(DeserializationError::NonCanonicalScalar)?
         };
 
-        Some(Self {
+        Ok(Self {
             u,
             y,
             c: CompressedCiphertext(bytes[64..].to_vec()),

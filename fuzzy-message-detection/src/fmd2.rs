@@ -18,123 +18,6 @@ use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretKey(pub Vec<Scalar>);
 
-#[derive(Debug, Clone)]
-pub struct PublicKey {
-    keys: Vec<RistrettoPoint>,
-}
-
-impl From<Vec<RistrettoPoint>> for PublicKey {
-    #[inline]
-    fn from(keys: Vec<RistrettoPoint>) -> Self {
-        Self { keys }
-    }
-}
-
-impl PublicKey {
-    pub fn to_bytes(&self) -> Vec<[u8; 32]> {
-        self.keys
-            .iter()
-            .map(|point| point.compress().to_bytes())
-            .collect()
-    }
-
-    pub fn to_bytes_flattened(&self) -> Vec<u8> {
-        self.to_bytes().into_flattened()
-    }
-
-    pub fn from_bytes_flattened(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() % 32 != 0 {
-            return None;
-        }
-
-        Self::from_bytes(bytes.chunks(32).map(|dyn_chunk| {
-            let mut chunk = [0u8; 32];
-            chunk.copy_from_slice(dyn_chunk);
-            chunk
-        }))
-    }
-
-    pub fn from_bytes<I>(public_keys: I) -> Option<Self>
-    where
-        I: IntoIterator<Item = [u8; 32]>,
-    {
-        Some(Self {
-            keys: public_keys
-                .into_iter()
-                .map(|key| CompressedRistretto(key).decompress())
-                .collect::<Option<Vec<_>>>()?,
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DetectionKey {
-    indices: Vec<usize>,
-    keys: Vec<Scalar>,
-}
-
-impl DetectionKey {
-    pub fn to_bytes(&self) -> Vec<[u8; 40]> {
-        self.indices
-            .iter()
-            .zip(self.keys.iter())
-            .map(|(index, key)| {
-                let mut output = [0u8; 40];
-
-                let index = *index as u64;
-
-                let encoded_index = index.to_le_bytes();
-                let encoded_scalar = key.to_bytes();
-
-                output[..8].copy_from_slice(&encoded_index);
-                output[8..].copy_from_slice(&encoded_scalar);
-
-                output
-            })
-            .collect()
-    }
-
-    pub fn to_bytes_flattened(&self) -> Vec<u8> {
-        self.to_bytes().into_flattened()
-    }
-
-    pub fn from_bytes_flattened(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() % 40 != 0 {
-            return None;
-        }
-
-        Self::from_bytes(bytes.chunks(40).map(|dyn_chunk| {
-            let mut chunk = [0u8; 40];
-            chunk.copy_from_slice(dyn_chunk);
-            chunk
-        }))
-    }
-
-    pub fn from_bytes<I>(bytes: I) -> Option<Self>
-    where
-        I: IntoIterator<Item = [u8; 40]>,
-    {
-        let (indices, keys) =
-            bytes
-                .into_iter()
-                .try_fold((vec![], vec![]), |(mut indices, mut keys), chunk| {
-                    indices.push({
-                        let mut encoded_index = [0u8; 8];
-                        encoded_index.copy_from_slice(&chunk[..8]);
-                        usize::try_from(u64::from_le_bytes(encoded_index)).ok()?
-                    });
-                    keys.push({
-                        let mut encoded_scalar = [0u8; 32];
-                        encoded_scalar.copy_from_slice(&chunk[8..]);
-                        Scalar::from_bytes_mod_order(encoded_scalar)
-                    });
-                    Some((indices, keys))
-                })?;
-
-        Some(Self { indices, keys })
-    }
-}
-
 impl From<Vec<Scalar>> for SecretKey {
     #[inline]
     fn from(scalars: Vec<Scalar>) -> Self {
@@ -216,8 +99,125 @@ impl SecretKey {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicKey {
+    keys: Vec<RistrettoPoint>,
+}
+
+impl From<Vec<RistrettoPoint>> for PublicKey {
+    #[inline]
+    fn from(keys: Vec<RistrettoPoint>) -> Self {
+        Self { keys }
+    }
+}
+
+impl PublicKey {
+    pub fn to_bytes(&self) -> Vec<[u8; 32]> {
+        self.keys
+            .iter()
+            .map(|point| point.compress().to_bytes())
+            .collect()
+    }
+
+    pub fn to_bytes_flattened(&self) -> Vec<u8> {
+        self.to_bytes().into_flattened()
+    }
+
+    pub fn from_bytes_flattened(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() % 32 != 0 {
+            return None;
+        }
+
+        Self::from_bytes(bytes.chunks(32).map(|dyn_chunk| {
+            let mut chunk = [0u8; 32];
+            chunk.copy_from_slice(dyn_chunk);
+            chunk
+        }))
+    }
+
+    pub fn from_bytes<I>(public_keys: I) -> Option<Self>
+    where
+        I: IntoIterator<Item = [u8; 32]>,
+    {
+        Some(Self {
+            keys: public_keys
+                .into_iter()
+                .map(|key| CompressedRistretto(key).decompress())
+                .collect::<Option<Vec<_>>>()?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetectionKey {
+    indices: Vec<usize>,
+    keys: Vec<Scalar>,
+}
+
+impl DetectionKey {
+    pub fn to_bytes(&self) -> Vec<[u8; 40]> {
+        self.indices
+            .iter()
+            .zip(self.keys.iter())
+            .map(|(index, key)| {
+                let mut output = [0u8; 40];
+
+                let index = *index as u64;
+
+                let encoded_index = index.to_le_bytes();
+                let encoded_scalar = key.to_bytes();
+
+                output[..8].copy_from_slice(&encoded_index);
+                output[8..].copy_from_slice(&encoded_scalar);
+
+                output
+            })
+            .collect()
+    }
+
+    pub fn to_bytes_flattened(&self) -> Vec<u8> {
+        self.to_bytes().into_flattened()
+    }
+
+    pub fn from_bytes_flattened(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() % 40 != 0 {
+            return None;
+        }
+
+        Self::from_bytes(bytes.chunks(40).map(|dyn_chunk| {
+            let mut chunk = [0u8; 40];
+            chunk.copy_from_slice(dyn_chunk);
+            chunk
+        }))
+    }
+
+    pub fn from_bytes<I>(bytes: I) -> Option<Self>
+    where
+        I: IntoIterator<Item = [u8; 40]>,
+    {
+        let (indices, keys) =
+            bytes
+                .into_iter()
+                .try_fold((vec![], vec![]), |(mut indices, mut keys), chunk| {
+                    indices.push({
+                        let mut encoded_index = [0u8; 8];
+                        encoded_index.copy_from_slice(&chunk[..8]);
+                        usize::try_from(u64::from_le_bytes(encoded_index)).ok()?
+                    });
+                    keys.push({
+                        let mut encoded_scalar = [0u8; 32];
+                        encoded_scalar.copy_from_slice(&chunk[8..]);
+                        Scalar::from_bytes_mod_order(encoded_scalar)
+                    });
+                    Some((indices, keys))
+                })?;
+
+        Some(Self { indices, keys })
+    }
+}
+
 /// Compressed representation of the γ bit-ciphertexts of a [`FlagCiphertext`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct CompressedCiphertext(Vec<u8>);
 
 impl CompressedCiphertext {
@@ -254,7 +254,7 @@ impl Ciphertext {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlagCiphertexts {
     u: RistrettoPoint,
     y: Scalar,
@@ -443,9 +443,38 @@ mod tests {
         }
     }
 
-    /// Test when test fails
+    /// Test round-trip serialization of data
     #[test]
-    fn test_test_fail() {
-        // TODO
+    fn test_round_trip_deserialization() {
+        let mut csprng = rand_core::OsRng;
+
+        let non_zero_key = [
+            36u8, 61, 27, 180, 246, 173, 254, 184, 58, 116, 25, 110, 50, 23, 50, 252, 16, 17, 17,
+            17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 1,
+        ];
+        let sk = SecretKey::from(vec![
+            Scalar::from_bytes_mod_order([0u8; 32]),
+            Scalar::from_bytes_mod_order(non_zero_key),
+        ]);
+
+        let serialized = sk.to_bytes();
+        assert_eq!(serialized, vec![[0u8; 32], non_zero_key]);
+        let deserialized = SecretKey::from_bytes_mod_order(serialized);
+        assert_eq!(deserialized, sk);
+
+        let pk = sk.generate_public_key();
+        let serialized = pk.to_bytes_flattened();
+        let deserialized = PublicKey::from_bytes_flattened(&serialized).expect("Test failed");
+        assert_eq!(deserialized, pk);
+
+        let dk = sk.extract(&[0, 1]).expect("Test failed");
+        let serialized = dk.to_bytes_flattened();
+        let deserialized = DetectionKey::from_bytes_flattened(&serialized).expect("Test failed");
+        assert_eq!(dk, deserialized);
+
+        let flag_ciphertext = FlagCiphertexts::generate_flag(&pk, &mut csprng);
+        let serialized = flag_ciphertext.to_bytes();
+        let deserialized = FlagCiphertexts::from_bytes(&serialized).expect("Test failed");
+        assert_eq!(flag_ciphertext, deserialized);
     }
 }

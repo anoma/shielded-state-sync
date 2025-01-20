@@ -3,6 +3,7 @@
 #[cfg(feature = "serde")]
 use serde::{Serialize,Deserialize};
 
+use alloc::collections::BTreeSet;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
@@ -10,9 +11,6 @@ use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256, Sha512};
 
 use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
-
-
-
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -39,24 +37,33 @@ impl SecretKey {
     }
 
     fn extract(&self, indices: &[usize]) -> Option<DetectionKey> {
-        
+        // check that input indices are distinct
+        let index_set = BTreeSet::from_iter(indices);
+        if index_set.len() != indices.len() {
+            return None;
+        }
+
         // If number of indices is larger than the γ parameter.
-        if indices.len() > self.0.len() { return None } 
-            
-        let keys = indices.iter().map(|&i| self.0[i]).collect();
-        
-        Some(
-            DetectionKey {
+        if index_set.len() > self.0.len() {
+            return None;
+        }
+
+        let mut keys = Vec::with_capacity(indices.len());
+        for ix in indices {
+            keys.push(*self.0.get(*ix)?);
+        }
+
+        Some(DetectionKey {
             indices: indices.to_vec(),
             keys,
-            }
-        )
+        })
     }
 
     fn generate_public_key(&self) -> PublicKey {
-        let keys = self.0
+        let keys = self
+            .0
             .iter()
-            .map(|k| k * &RISTRETTO_BASEPOINT_POINT)
+            .map(|k| k * RISTRETTO_BASEPOINT_POINT)
             .collect();
         PublicKey { keys }
     }
@@ -74,112 +81,110 @@ impl FlagCiphertexts {
     fn generate_flag<R: RngCore + CryptoRng>(pk: &PublicKey, rng: &mut R) -> Self {
         let r = Scalar::random(rng);
         let z = Scalar::random(rng);
-        let u = RISTRETTO_BASEPOINT_POINT * &r;
-        let w = RISTRETTO_BASEPOINT_POINT * &z;
+        let u = RISTRETTO_BASEPOINT_POINT * r;
+        let w = RISTRETTO_BASEPOINT_POINT * z;
 
         let bit_ciphertexts: Vec<bool> = pk
             .keys
             .iter()
             .map(|pk_i| {
-                let k_i = RandomOracle::h(&u, &(pk_i * &r), &w);
-                let bit_ciphertext_i = !k_i; // Encrypt bit 1 with hashed mask k_1.
-                bit_ciphertext_i
+                let k_i = hash_to_flag_ciphertext_bit(&u, &(pk_i * r), &w);
+                !k_i // Encrypt bit 1 with hashed mask k_i.
             })
             .collect();
 
-        let m = RandomOracle::g(&u, &bit_ciphertexts);
+        let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
 
         let r_inv = r.invert();
         let y = (z - m) * r_inv;
 
         let c = FlagCiphertexts::to_bytes(&bit_ciphertexts);
 
-        Self { u, y, c}
+        Self { u, y, c }
     }
 
-    // Compressed representation of the γ bit-ciphertexts of a FlagCiphertext.
+    /// Compressed representation of the γ bit-ciphertexts of a FlagCiphertext.
     fn to_bytes(bit_ciphertexts: &[bool]) -> Vec<u8> {
-        
         let c: Vec<u8> = bit_ciphertexts
             .chunks(8)
-            .map(|bits| 
-                {
-                    let mut byte = 0u8;
-                    for (i,bit) in bits.iter().enumerate() {
-                        if *bit { byte ^= 1u8 << i }
+            .map(|bits| {
+                let mut byte = 0u8;
+                for (i, bit) in bits.iter().enumerate() {
+                    if *bit {
+                        byte ^= 1u8 << i
                     }
-                    byte
-                })
+                }
+                byte
+            })
             .collect();
         c
     }
 
-    // Uncompress the inner bit-ciphertexts of this FlagCiphertext.
+    /// Decompress the inner bit-ciphertexts of this FlagCiphertext.
     fn to_bits(&self) -> Vec<bool> {
-
-        let mut bit_ciphertexts:Vec<bool> = Vec::new();
-        for byte in self.c.iter() {        
+        let mut bit_ciphertexts: Vec<bool> = Vec::new();
+        for byte in self.c.iter() {
             for i in 0..8 {
                 bit_ciphertexts.push(1u8 == byte >> i & 1u8);
             }
         }
-        
+
         bit_ciphertexts
     }
 }
 
-// Random oracles H and G from Fig. 3 of the FMD paper.
-struct RandomOracle;
-impl RandomOracle {
+/// This is the hash H from Fig.3 of the FMD paper, instantiated with SHA256.
+fn hash_to_flag_ciphertext_bit(
+    u: &RistrettoPoint,
+    ddh_mask: &RistrettoPoint,
+    w: &RistrettoPoint,
+) -> bool {
+    let mut hasher = Sha256::new();
 
-    // H is instantiated with SHA256
-    fn h(u: &RistrettoPoint, ddh_mask: &RistrettoPoint, w: &RistrettoPoint) -> bool {
+    hasher.update(u.compress().to_bytes());
+    hasher.update(ddh_mask.compress().to_bytes());
+    hasher.update(w.compress().to_bytes());
 
-        let mut hasher = Sha256::new();
+    let k_i_byte = hasher.finalize().as_slice()[0] & 1u8;
 
-        hasher.update(u.compress().to_bytes());
-        hasher.update(ddh_mask.compress().to_bytes());
-        hasher.update(w.compress().to_bytes());
-        
-        let k_i_byte = hasher.finalize().as_slice()[0] & 1u8;
-
-        k_i_byte == 1u8
-    }
-
-    // G is instantiated with SHA512
-    fn g(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar {
-        
-        let mut m_bytes = u.compress().to_bytes().to_vec();
-        m_bytes.extend_from_slice(&FlagCiphertexts::to_bytes(bit_ciphertexts));
-        
-        Scalar::hash_from_bytes::<Sha512>(&m_bytes)
-    }
+    k_i_byte == 1u8
 }
+
+/// This is the hash G from Fig.3 of the FMD paper, instantiated with SHA512.
+fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar {
+    let mut m_bytes = u.compress().to_bytes().to_vec();
+    m_bytes.extend_from_slice(&FlagCiphertexts::to_bytes(bit_ciphertexts));
+
+    Scalar::hash_from_bytes::<Sha512>(&m_bytes)
+}
+
 pub struct Fmd2;
 
 impl FmdScheme for Fmd2 {
-    
-    type PublicKey=PublicKey;
+    type PublicKey = PublicKey;
 
-    type SecretKey=SecretKey;
+    type SecretKey = SecretKey;
 
-    type DetectionKey=DetectionKey;
+    type DetectionKey = DetectionKey;
 
-    type FlagCiphertexts=FlagCiphertexts;
+    type FlagCiphertexts = FlagCiphertexts;
 
-    fn generate_keys<R: RngCore + CryptoRng>(rates: &RestrictedRateSet, rng: &mut R) -> (Self::PublicKey,Self::SecretKey) {
+    fn generate_keys<R: RngCore + CryptoRng>(
+        rates: &RestrictedRateSet,
+        rng: &mut R,
+    ) -> (Self::PublicKey, Self::SecretKey) {
         let gamma = rates.gamma();
-        
+
         // Secret key.
         let sk = SecretKey::generate_keys(gamma, rng);
 
         // Public key.
         let pk = sk.generate_public_key();
 
-        (pk,sk)
+        (pk, sk)
     }
 
-    fn flag<R: RngCore + CryptoRng>(pk:&Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts {
+    fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts {
         FlagCiphertexts::generate_flag(pk, rng)
     }
 
@@ -188,20 +193,17 @@ impl FmdScheme for Fmd2 {
     }
 
     fn test(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
-        
         let u = flag_ciphers.u;
         let bit_ciphertexts = flag_ciphers.to_bits();
-        let m = RandomOracle::g(&u, &bit_ciphertexts);
-        let w = RISTRETTO_BASEPOINT_POINT * &m + flag_ciphers.u * &flag_ciphers.y;
-
+        let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
+        let w = RISTRETTO_BASEPOINT_POINT * m + flag_ciphers.u * flag_ciphers.y;
+        let mut success = true;
         for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
-            let k_i = RandomOracle::h(&u, &(u * xi), &w);
-            if k_i == bit_ciphertexts[*index] {
-                return false; 
-            }
+            let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
+            success = success && k_i != bit_ciphertexts[*index]
         }
 
-        true    
+        success
     }
 }
 
@@ -217,10 +219,23 @@ mod tests {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);
-        let (pk,sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+        let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
         let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
-        let dk = <Fmd2 as FmdScheme>::extract(&sk,&(0..rates.gamma()).collect::<Vec<_>>());
+        let dk = <Fmd2 as FmdScheme>::extract(&sk, &(0..rates.gamma()).collect::<Vec<_>>());
         assert!(<Fmd2 as FmdScheme>::test(&dk.unwrap(), &flag_cipher));
+    }
+
+    /// Test that we perform checks on the input indices when extract flags.
+    #[test]
+    fn test_extract_checks() {
+        let mut csprng = rand_core::OsRng;
+
+        let rates = RestrictedRateSet::new(5);
+        let (_pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+
+        assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 0, 1]).is_none());
+        assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 1, 2, 3, 4, 5, 6]).is_none());
+        assert!(<Fmd2 as FmdScheme>::extract(&sk, &[6]).is_none());
     }
 
     #[test]
@@ -228,10 +243,10 @@ mod tests {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);
-        let (pk,sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+        let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
         for _i in 0..10 {
             let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
-            let dk = <Fmd2 as FmdScheme>::extract(&sk,&[0, 2, 4]);
+            let dk = <Fmd2 as FmdScheme>::extract(&sk, &[0, 2, 4]);
             assert!(<Fmd2 as FmdScheme>::test(&dk.unwrap(), &flag_cipher));
         }
     }

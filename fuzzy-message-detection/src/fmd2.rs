@@ -1,5 +1,8 @@
 //! The FMD2 scheme specified in Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use alloc::collections::BTreeSet;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
@@ -10,14 +13,17 @@ use sha2::{Digest, Sha256, Sha512};
 use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecretKey(Vec<Scalar>);
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PublicKey {
     keys: Vec<RistrettoPoint>,
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DetectionKey {
     indices: Vec<usize>,
     keys: Vec<Scalar>,
@@ -64,6 +70,7 @@ impl SecretKey {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlagCiphertexts {
     u: RistrettoPoint,
     y: Scalar,

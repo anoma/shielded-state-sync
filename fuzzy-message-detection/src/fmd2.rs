@@ -531,4 +531,62 @@ mod tests {
         let deserialized = FlagCiphertexts::from_bytes(&serialized).expect("Test failed");
         assert_eq!(flag_ciphertext, deserialized);
     }
+
+    /// Test that non-canonical serialization of scalars
+    /// will fail
+    #[test]
+    fn test_non_canonical_serialization_fails() {
+        const NON_CANONICAL_SCALAR_ENCODING: [u8; 32] = [0x11_u8; 32];
+
+        assert!(matches!(
+            SecretKey::from_canonical_bytes_flattened(&NON_CANONICAL_SCALAR_ENCODING),
+            Err(DeserializationError::NonCanonicalScalar),
+        ));
+
+        let mut detection_key_encoding = vec![0u8; 8];
+        detection_key_encoding.extend_from_slice(&NON_CANONICAL_SCALAR_ENCODING);
+
+        assert!(matches!(
+            DetectionKey::from_bytes_flattened(&detection_key_encoding),
+            Err(DeserializationError::NonCanonicalScalar),
+        ));
+
+        let point_encoding = [
+            126, 76, 53, 87, 109, 161, 50, 197, 114, 116, 159, 169, 132, 199, 118, 106, 113, 179,
+            232, 112, 190, 164, 188, 74, 103, 85, 129, 6, 59, 91, 240, 119,
+        ];
+        let mut flag_ciphertext_encoding = point_encoding.to_vec();
+        flag_ciphertext_encoding.extend_from_slice(&NON_CANONICAL_SCALAR_ENCODING);
+        flag_ciphertext_encoding.extend_from_slice(&[1]);
+
+        assert!(matches!(
+            FlagCiphertexts::from_bytes(&flag_ciphertext_encoding),
+            Err(DeserializationError::NonCanonicalScalar),
+        ));
+    }
+
+    /// Test that invalid compressed ristretto serialization of points
+    /// will fail
+    #[test]
+    fn test_invalid_compressed_ristretto_points() {
+        const INVALID_COMPRESSED_RISTRETTO_POINT: [u8; 32] = [0x11_u8; 32];
+
+        assert!(matches!(
+            PublicKey::from_bytes_flattened(&INVALID_COMPRESSED_RISTRETTO_POINT),
+            Err(DeserializationError::InvalidRistrettoPoint),
+        ));
+
+        let valid_scalar_encoding = [
+            151, 68, 196, 236, 135, 31, 86, 78, 159, 251, 95, 245, 158, 182, 173, 110, 197, 45,
+            214, 4, 185, 122, 47, 222, 77, 200, 135, 194, 211, 9, 80, 0,
+        ];
+        let mut flag_ciphertext_encoding = INVALID_COMPRESSED_RISTRETTO_POINT.to_vec();
+        flag_ciphertext_encoding.extend_from_slice(&valid_scalar_encoding);
+        flag_ciphertext_encoding.extend_from_slice(&[1]);
+
+        assert!(matches!(
+            FlagCiphertexts::from_bytes(&flag_ciphertext_encoding),
+            Err(DeserializationError::InvalidRistrettoPoint),
+        ));
+    }
 }

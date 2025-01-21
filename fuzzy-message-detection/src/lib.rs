@@ -3,7 +3,9 @@
 extern crate alloc;
 
 pub mod fmd2;
-pub use fmd2::SecretKey;
+
+// Export these types for ease of use of the library.
+pub use fmd2::{DetectionKey, FlagCiphertexts, PublicKey, SecretKey};
 
 use rand_core::{CryptoRng, RngCore};
 

@@ -27,6 +27,7 @@ use sgx_types::error::SgxStatus;
 use std::io::{self, Write};
 use std::slice;
 use std::string::String;
+use std::untrusted::time::InstantEx;
 use std::vec::Vec;
 
 use curve25519_dalek::{
@@ -36,8 +37,7 @@ use rand_chacha::ChaCha8Rng;
 use rand_core::{CryptoRng, RngCore, SeedableRng};
 use sha3::{Digest, Sha3_256, Sha3_512};
 
-const NUM_REPETITIONS: usize = 1 << 20;
-
+const NUM_REPETITIONS: usize = 1 << 12;
 
 #[derive(Debug, Clone)]
 pub struct DetectionKey {
@@ -259,21 +259,32 @@ pub unsafe extern "C" fn say_something(some_string: *const u8, some_len: usize) 
 
     let mut csprng = ChaCha8Rng::seed_from_u64(42);
 
-    let rates = RestrictedRateSet::new(5);
+    let rates = RestrictedRateSet::new(22);
     let (pk, sk) = generate_keys(&rates, &mut csprng);
     let flag_cipher = flag(&pk, &mut csprng);
-    let dk = extract(&sk, &[0, 2, 4]);
-
-    assert!(detect(&dk.unwrap(), &flag_cipher));
 
     let start = std::time::Instant::now();
-    for _ in 0..NUM_VERIFY_REPETITIONS {
-        detect(&dk.unwrap(), &flag_cipher);
+    for _ in 0..NUM_REPETITIONS {
+        flag(&pk, &mut csprng);
     }
 
     println!(
-        "detect time: {} ns",
-        start.elapsed().as_nanos() / NUM_VERIFY_REPETITIONS as u128
+        "flag time: {} us",
+        start.elapsed().as_micros() / NUM_REPETITIONS as u128
+    );
+
+    let dk = extract(&sk, &[0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]).unwrap();
+
+    assert!(detect(&dk, &flag_cipher));
+
+    let start = std::time::Instant::now();
+    for _ in 0..NUM_REPETITIONS {
+        detect(&dk, &flag_cipher);
+    }
+
+    println!(
+        "detect time: {} us",
+        start.elapsed().as_micros() / NUM_REPETITIONS as u128
     );
 
     SgxStatus::Success

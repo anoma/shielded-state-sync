@@ -125,7 +125,7 @@ impl FlagCiphertexts {
         let mut bit_ciphertexts: Vec<bool> = Vec::new();
         for byte in self.c.iter() {
             for i in 0..8 {
-                bit_ciphertexts.push(1u8 == byte >> i & 1u8);
+                bit_ciphertexts.push(1u8 == (byte >> i) & 1u8);
             }
         }
 

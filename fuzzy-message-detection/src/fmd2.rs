@@ -192,7 +192,7 @@ impl FmdScheme for Fmd2 {
         sk.extract(indices)
     }
 
-    fn test(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
+    fn detect(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
         let u = flag_ciphers.u;
         let bit_ciphertexts = flag_ciphers.to_bits();
         let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
@@ -222,7 +222,7 @@ mod tests {
         let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
         let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
         let dk = <Fmd2 as FmdScheme>::extract(&sk, &(0..rates.gamma()).collect::<Vec<_>>());
-        assert!(<Fmd2 as FmdScheme>::test(&dk.unwrap(), &flag_cipher));
+        assert!(<Fmd2 as FmdScheme>::detect(&dk.unwrap(), &flag_cipher));
     }
 
     /// Test that we perform checks on the input indices when extract flags.
@@ -247,7 +247,7 @@ mod tests {
         for _i in 0..10 {
             let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
             let dk = <Fmd2 as FmdScheme>::extract(&sk, &[0, 2, 4]);
-            assert!(<Fmd2 as FmdScheme>::test(&dk.unwrap(), &flag_cipher));
+            assert!(<Fmd2 as FmdScheme>::detect(&dk.unwrap(), &flag_cipher));
         }
     }
 }

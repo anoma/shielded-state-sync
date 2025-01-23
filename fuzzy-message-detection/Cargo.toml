@@ -10,5 +10,12 @@ serde = { version = "1.0.217", features = ["derive"], optional = true }
 sha2 = "0.10.8"
 subtle = {  version = "2.6.1" , default-features = false}
 
+[dev-dependencies]
+criterion = "0.3"
+
 [features]
 serde = ["dep:serde", "curve25519-dalek/serde"]
+
+[[bench]]
+name = "benchmark"
+harness = false

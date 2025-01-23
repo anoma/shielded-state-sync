@@ -32,10 +32,13 @@ use std::vec::Vec;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
-// use fuzzy_message_detection::{fmd2::*, FmdScheme, RestrictedRateSet};
-use rand_core::{CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 use sha3::{Digest, Sha3_256, Sha3_512};
+
+const NUM_REPETITIONS: usize = 1 << 20;
+
+
 #[derive(Debug, Clone)]
 pub struct DetectionKey {
     indices: Vec<usize>,
@@ -78,17 +81,6 @@ impl SecretKey {
     }
 
     fn extract(&self, indices: &[usize]) -> Option<DetectionKey> {
-        // check that input indices are distinct
-        // let index_set = BTreeSet::from_iter(indices);
-        // if index_set.len() != indices.len() {
-        //     return None;
-        // }
-
-        // If number of indices is larger than the γ parameter.
-        // if index_set.len() > self.0.len() {
-        //     return None;
-        // }
-
         let mut keys = Vec::with_capacity(indices.len());
         for ix in indices {
             keys.push(*self.0.get(*ix)?);
@@ -224,7 +216,7 @@ fn extract(sk: &SecretKey, indices: &[usize]) -> Option<DetectionKey> {
     sk.extract(indices)
 }
 
-fn test(dsk: &DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
+fn detect(dsk: &DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
     let u = flag_ciphers.u;
     let bit_ciphertexts = flag_ciphers.to_bits();
     let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
@@ -269,11 +261,20 @@ pub unsafe extern "C" fn say_something(some_string: *const u8, some_len: usize) 
 
     let rates = RestrictedRateSet::new(5);
     let (pk, sk) = generate_keys(&rates, &mut csprng);
-    for i in 0..10 {
-        let flag_cipher = flag(&pk, &mut csprng);
-        let dk = extract(&sk, &[0, 2, 4]);
-        println!("test {}: ret {}", i, test(&dk.unwrap(), &flag_cipher));
+    let flag_cipher = flag(&pk, &mut csprng);
+    let dk = extract(&sk, &[0, 2, 4]);
+
+    assert!(detect(&dk.unwrap(), &flag_cipher));
+
+    let start = std::time::Instant::now();
+    for _ in 0..NUM_VERIFY_REPETITIONS {
+        detect(&dk.unwrap(), &flag_cipher);
     }
+
+    println!(
+        "detect time: {} ns",
+        start.elapsed().as_nanos() / NUM_VERIFY_REPETITIONS as u128
+    );
 
     SgxStatus::Success
 }

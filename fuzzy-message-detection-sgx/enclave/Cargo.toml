@@ -34,7 +34,7 @@ sgx_tstd = { git = "https://github.com/apache/incubator-teaclave-sgx-sdk", branc
 
 [dependencies]
 curve25519-dalek = { package = "curve25519-dalek-ng", version = "4.1", default-features = false, features = ["u64_backend"] }
-fuzzy-message-detection = { path = "../../fuzzy-message-detection"}
+# fuzzy-message-detection = { path = "../../fuzzy-message-detection"}
 sha3 = { version = "0.9", default-features = false }
 subtle = {  version = "2.5"}
 rand_core = {version = "0.6", default-features = false}

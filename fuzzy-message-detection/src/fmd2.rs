@@ -488,9 +488,18 @@ mod tests {
 
         let rates = RestrictedRateSet::new(5);
         let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+        let dk =
+            <Fmd2 as FmdScheme>::extract(&sk, &(0..rates.gamma()).collect::<Vec<_>>()).unwrap();
+
         let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
-        let dk = <Fmd2 as FmdScheme>::extract(&sk, &(0..rates.gamma()).collect::<Vec<_>>());
-        assert!(<Fmd2 as FmdScheme>::test(&dk.unwrap(), &flag_cipher));
+        assert!(<Fmd2 as FmdScheme>::test(&dk, &flag_cipher));
+
+        // generate a couple of diversified pubkeys
+        for _ in 0..5 {
+            let pk = sk.diversified_public_key(RistrettoPoint::random(&mut csprng));
+            let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
+            assert!(<Fmd2 as FmdScheme>::test(&dk, &flag_cipher));
+        }
     }
 
     /// Test that we perform checks on the input indices when extract flags.

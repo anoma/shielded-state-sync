@@ -313,9 +313,9 @@ impl Ciphertext {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlagCiphertexts {
-    u: RistrettoPoint,
+    u_1: RistrettoPoint,
+    u_2: RistrettoPoint,
     y: Scalar,
-    div: RistrettoPoint,
     c: CompressedCiphertext,
 }
 
@@ -323,9 +323,9 @@ impl FlagCiphertexts {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut output = Vec::with_capacity(32 + 32 + self.c.0.len());
 
-        output.extend_from_slice(&self.u.compress().to_bytes());
+        output.extend_from_slice(&self.u_1.compress().to_bytes());
+        output.extend_from_slice(&self.u_2.compress().to_bytes());
         output.extend_from_slice(&self.y.to_bytes());
-        output.extend_from_slice(&self.div.compress().to_bytes());
         output.extend_from_slice(&self.c.0);
 
         output
@@ -336,7 +336,7 @@ impl FlagCiphertexts {
             return Err(DeserializationError::ShortFlagCiphertext);
         }
 
-        let u = {
+        let u_1 = {
             let mut point = CompressedRistretto([0u8; 32]);
             point.0.copy_from_slice(&bytes[..32]);
             point
@@ -344,69 +344,69 @@ impl FlagCiphertexts {
                 .ok_or(DeserializationError::InvalidRistrettoPoint)?
         };
 
-        let y = {
-            let mut encoded_scalar = [0u8; 32];
-            encoded_scalar.copy_from_slice(&bytes[32..64]);
-            Option::<_>::from(Scalar::from_canonical_bytes(encoded_scalar))
-                .ok_or(DeserializationError::NonCanonicalScalar)?
-        };
-
-        let div = {
+        let u_2 = {
             let mut point = CompressedRistretto([0u8; 32]);
-            point.0.copy_from_slice(&bytes[64..96]);
+            point.0.copy_from_slice(&bytes[32..64]);
             point
                 .decompress()
                 .ok_or(DeserializationError::InvalidRistrettoPoint)?
         };
 
+        let y = {
+            let mut encoded_scalar = [0u8; 32];
+            encoded_scalar.copy_from_slice(&bytes[64..96]);
+            Option::<_>::from(Scalar::from_canonical_bytes(encoded_scalar))
+                .ok_or(DeserializationError::NonCanonicalScalar)?
+        };
+
         Ok(Self {
-            div,
-            u,
+            u_1,
+            u_2,
             y,
             c: CompressedCiphertext(bytes[96..].to_vec()),
         })
     }
 
     fn generate_flag<R: RngCore + CryptoRng>(pk: &PublicKey, rng: &mut R) -> Self {
-        let r = Scalar::random(rng);
+        let r_1 = Scalar::random(rng);
+        let r_2 = Scalar::random(rng);
         let z = Scalar::random(rng);
-        let u = pk.div * r;
-        let w = pk.div * z;
+
+        let u_1 = pk.div * r_1;
+        let u_2 = pk.div * r_2;
+        let w = u_2 * z;
 
         let bit_ciphertexts = Ciphertext(
             pk.keys
                 .iter()
                 .map(|pk_i| {
-                    let k_i = hash_to_flag_ciphertext_bit(&u, &(pk_i * r), &w);
+                    let k_i = hash_to_flag_ciphertext_bit(&u_1, &u_2, &(pk_i * r_1), &w);
                     k_i ^ 1u8 // Encrypt bit 1 with hashed mask k_i.
                 })
                 .collect(),
         );
 
         let c = bit_ciphertexts.compress();
-        let m = hash_flag_ciphertexts(&u, &c);
+        let m = hash_flag_ciphertexts(&u_1, &u_2, &c);
 
-        let r_inv = r.invert();
-        let y = (z - m) * r_inv;
+        let r_1_inv = r_1.invert();
+        let y = (z - m) * r_1_inv * r_2;
 
-        Self {
-            u,
-            y,
-            c,
-            div: pk.div,
-        }
+        Self { u_1, u_2, y, c }
     }
 }
 
 /// This is the hash H from Fig.3 of the FMD paper, instantiated with SHA256.
 fn hash_to_flag_ciphertext_bit(
-    u: &RistrettoPoint,
+    u_1: &RistrettoPoint,
+    u_2: &RistrettoPoint,
     ddh_mask: &RistrettoPoint,
     w: &RistrettoPoint,
 ) -> u8 {
     let mut hasher = Sha256::new();
 
-    hasher.update(u.compress().to_bytes());
+    hasher.update(u_1.compress().to_bytes());
+    hasher.update(u_2.compress().to_bytes());
     hasher.update(ddh_mask.compress().to_bytes());
     hasher.update(w.compress().to_bytes());
 
@@ -415,12 +415,14 @@ fn hash_to_flag_ciphertext_bit(
 
 /// This is the hash G from Fig.3 of the FMD paper, instantiated with SHA512.
 fn hash_flag_ciphertexts(
-    u: &RistrettoPoint,
+    u_1: &RistrettoPoint,
+    u_2: &RistrettoPoint,
     CompressedCiphertext(ciphertexts): &CompressedCiphertext,
 ) -> Scalar {
     let mut digest = Sha512::new();
 
-    digest.update(u.compress().to_bytes());
+    digest.update(u_1.compress().to_bytes());
+    digest.update(u_2.compress().to_bytes());
     digest.update(ciphertexts);
 
     Scalar::from_hash(digest)
@@ -461,13 +463,13 @@ impl FmdScheme for Fmd2 {
     }
 
     fn detect(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
-        let u = flag_ciphers.u;
+        let Self::FlagCiphertexts { u_1, u_2, y, c } = flag_ciphers;
         let bit_ciphertexts = flag_ciphers.c.decompress();
-        let m = hash_flag_ciphertexts(&u, &flag_ciphers.c);
-        let w = flag_ciphers.div * m + flag_ciphers.u * flag_ciphers.y;
+        let m = hash_flag_ciphertexts(u_1, u_2, c);
+        let w = y * u_1 + m * u_2;
         let mut success = 1u8;
         for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
-            let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
+            let k_i = hash_to_flag_ciphertext_bit(u_1, u_2, &(u_1 * xi), &w);
             success = black_box(success & k_i ^ bit_ciphertexts.0[*index])
         }
 
@@ -587,8 +589,8 @@ mod tests {
             232, 112, 190, 164, 188, 74, 103, 85, 129, 6, 59, 91, 240, 119,
         ];
         let mut flag_ciphertext_encoding = point_encoding.to_vec();
-        flag_ciphertext_encoding.extend_from_slice(&NON_CANONICAL_SCALAR_ENCODING);
         flag_ciphertext_encoding.extend_from_slice(&point_encoding);
+        flag_ciphertext_encoding.extend_from_slice(&NON_CANONICAL_SCALAR_ENCODING);
         flag_ciphertext_encoding.extend_from_slice(&[1]);
 
         assert!(matches!(
@@ -613,8 +615,8 @@ mod tests {
             214, 4, 185, 122, 47, 222, 77, 200, 135, 194, 211, 9, 80, 0,
         ];
         let mut flag_ciphertext_encoding = INVALID_COMPRESSED_RISTRETTO_POINT.to_vec();
-        flag_ciphertext_encoding.extend_from_slice(&valid_scalar_encoding);
         flag_ciphertext_encoding.extend_from_slice(&INVALID_COMPRESSED_RISTRETTO_POINT);
+        flag_ciphertext_encoding.extend_from_slice(&valid_scalar_encoding);
         flag_ciphertext_encoding.extend_from_slice(&[1]);
 
         assert!(matches!(

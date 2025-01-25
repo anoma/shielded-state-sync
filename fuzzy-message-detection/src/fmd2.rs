@@ -35,6 +35,8 @@ fn check_key_size(
 
 #[derive(Debug, Error)]
 pub enum DeserializationError {
+    #[error("Invalid number of sub-keys")]
+    InvalidNumSubKeys,
     #[error("Expected data size to be a multiple of {expected_key_size} bytes")]
     InvalidSize { expected_key_size: usize },
     #[error("Got non-canonical representation of scalar")]
@@ -57,6 +59,15 @@ impl From<Vec<Scalar>> for SecretKey {
 }
 
 impl SecretKey {
+    pub fn public_key(&self) -> PublicKey {
+        self.diversified_public_key(RISTRETTO_BASEPOINT_POINT)
+    }
+
+    pub fn diversified_public_key(&self, div: RistrettoPoint) -> PublicKey {
+        let keys = self.0.iter().map(|k| k * div).collect();
+        PublicKey { div, keys }
+    }
+
     pub fn to_bytes(&self) -> Vec<[u8; 32]> {
         self.0.iter().map(Scalar::to_bytes).collect()
     }
@@ -140,35 +151,25 @@ impl SecretKey {
             keys,
         })
     }
-
-    fn generate_public_key(&self) -> PublicKey {
-        let keys = self
-            .0
-            .iter()
-            .map(|k| k * RISTRETTO_BASEPOINT_POINT)
-            .collect();
-        PublicKey { keys }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PublicKey {
+    div: RistrettoPoint,
     keys: Vec<RistrettoPoint>,
 }
 
-impl From<Vec<RistrettoPoint>> for PublicKey {
-    #[inline]
-    fn from(keys: Vec<RistrettoPoint>) -> Self {
-        Self { keys }
-    }
-}
-
 impl PublicKey {
+    pub const fn from_parts(div: RistrettoPoint, keys: Vec<RistrettoPoint>) -> Self {
+        Self { div, keys }
+    }
+
     pub fn to_bytes(&self) -> Vec<[u8; 32]> {
         self.keys
             .iter()
             .map(|point| point.compress().to_bytes())
+            .chain(core::iter::once_with(|| self.div.compress().to_bytes()))
             .collect()
     }
 
@@ -190,12 +191,14 @@ impl PublicKey {
     where
         I: IntoIterator<Item = [u8; 32]>,
     {
+        let mut keys: Vec<_> = public_keys
+            .into_iter()
+            .map(|key| CompressedRistretto(key).decompress())
+            .collect::<Option<Vec<_>>>()
+            .ok_or(DeserializationError::InvalidRistrettoPoint)?;
         Ok(Self {
-            keys: public_keys
-                .into_iter()
-                .map(|key| CompressedRistretto(key).decompress())
-                .collect::<Option<Vec<_>>>()
-                .ok_or(DeserializationError::InvalidRistrettoPoint)?,
+            div: keys.pop().ok_or(DeserializationError::InvalidNumSubKeys)?,
+            keys,
         })
     }
 }
@@ -312,6 +315,7 @@ impl Ciphertext {
 pub struct FlagCiphertexts {
     u: RistrettoPoint,
     y: Scalar,
+    div: RistrettoPoint,
     c: CompressedCiphertext,
 }
 
@@ -321,13 +325,14 @@ impl FlagCiphertexts {
 
         output.extend_from_slice(&self.u.compress().to_bytes());
         output.extend_from_slice(&self.y.to_bytes());
+        output.extend_from_slice(&self.div.compress().to_bytes());
         output.extend_from_slice(&self.c.0);
 
         output
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, DeserializationError> {
-        if bytes.len() < 64 {
+        if bytes.len() < 96 {
             return Err(DeserializationError::ShortFlagCiphertext);
         }
 
@@ -346,18 +351,27 @@ impl FlagCiphertexts {
                 .ok_or(DeserializationError::NonCanonicalScalar)?
         };
 
+        let div = {
+            let mut point = CompressedRistretto([0u8; 32]);
+            point.0.copy_from_slice(&bytes[64..96]);
+            point
+                .decompress()
+                .ok_or(DeserializationError::InvalidRistrettoPoint)?
+        };
+
         Ok(Self {
+            div,
             u,
             y,
-            c: CompressedCiphertext(bytes[64..].to_vec()),
+            c: CompressedCiphertext(bytes[96..].to_vec()),
         })
     }
 
     fn generate_flag<R: RngCore + CryptoRng>(pk: &PublicKey, rng: &mut R) -> Self {
         let r = Scalar::random(rng);
         let z = Scalar::random(rng);
-        let u = RISTRETTO_BASEPOINT_POINT * r;
-        let w = RISTRETTO_BASEPOINT_POINT * z;
+        let u = pk.div * r;
+        let w = pk.div * z;
 
         let bit_ciphertexts = Ciphertext(
             pk.keys
@@ -375,7 +389,12 @@ impl FlagCiphertexts {
         let r_inv = r.invert();
         let y = (z - m) * r_inv;
 
-        Self { u, y, c }
+        Self {
+            u,
+            y,
+            c,
+            div: pk.div,
+        }
     }
 }
 
@@ -428,7 +447,7 @@ impl FmdScheme for Fmd2 {
         let sk = SecretKey::generate_keys(gamma, rng);
 
         // Public key.
-        let pk = sk.generate_public_key();
+        let pk = sk.public_key();
 
         (pk, sk)
     }
@@ -445,7 +464,7 @@ impl FmdScheme for Fmd2 {
         let u = flag_ciphers.u;
         let bit_ciphertexts = flag_ciphers.c.decompress();
         let m = hash_flag_ciphertexts(&u, &flag_ciphers.c);
-        let w = RISTRETTO_BASEPOINT_POINT * m + flag_ciphers.u * flag_ciphers.y;
+        let w = flag_ciphers.div * m + flag_ciphers.u * flag_ciphers.y;
         let mut success = 1u8;
         for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
             let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
@@ -519,7 +538,7 @@ mod tests {
         let deserialized = SecretKey::from_bytes_mod_order(serialized);
         assert_eq!(deserialized, sk);
 
-        let pk = sk.generate_public_key();
+        let pk = sk.public_key();
         let serialized = pk.to_bytes_flattened();
         let deserialized = PublicKey::from_bytes_flattened(&serialized).expect("Test failed");
         assert_eq!(deserialized, pk);
@@ -560,6 +579,7 @@ mod tests {
         ];
         let mut flag_ciphertext_encoding = point_encoding.to_vec();
         flag_ciphertext_encoding.extend_from_slice(&NON_CANONICAL_SCALAR_ENCODING);
+        flag_ciphertext_encoding.extend_from_slice(&point_encoding);
         flag_ciphertext_encoding.extend_from_slice(&[1]);
 
         assert!(matches!(
@@ -585,6 +605,7 @@ mod tests {
         ];
         let mut flag_ciphertext_encoding = INVALID_COMPRESSED_RISTRETTO_POINT.to_vec();
         flag_ciphertext_encoding.extend_from_slice(&valid_scalar_encoding);
+        flag_ciphertext_encoding.extend_from_slice(&INVALID_COMPRESSED_RISTRETTO_POINT);
         flag_ciphertext_encoding.extend_from_slice(&[1]);
 
         assert!(matches!(

@@ -460,7 +460,7 @@ impl FmdScheme for Fmd2 {
         sk.extract(indices)
     }
 
-    fn test(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
+    fn detect(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
         let u = flag_ciphers.u;
         let bit_ciphertexts = flag_ciphers.c.decompress();
         let m = hash_flag_ciphertexts(&u, &flag_ciphers.c);
@@ -483,7 +483,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_flag_test() {
+    fn test_flag_detect() {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);
@@ -492,13 +492,13 @@ mod tests {
             <Fmd2 as FmdScheme>::extract(&sk, &(0..rates.gamma()).collect::<Vec<_>>()).unwrap();
 
         let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
-        assert!(<Fmd2 as FmdScheme>::test(&dk, &flag_cipher));
+        assert!(<Fmd2 as FmdScheme>::detect(&dk, &flag_cipher));
 
         // generate a couple of diversified pubkeys
         for _ in 0..5 {
             let pk = sk.diversified_public_key(RistrettoPoint::random(&mut csprng));
             let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
-            assert!(<Fmd2 as FmdScheme>::test(&dk, &flag_cipher));
+            assert!(<Fmd2 as FmdScheme>::detect(&dk, &flag_cipher));
         }
     }
 
@@ -516,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn test_flag_test_with_partial_detection_key() {
+    fn test_flag_detect_with_partial_detection_key() {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);
@@ -524,7 +524,7 @@ mod tests {
         for _i in 0..10 {
             let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
             let dk = <Fmd2 as FmdScheme>::extract(&sk, &[0, 2, 4]);
-            assert!(<Fmd2 as FmdScheme>::test(&dk.unwrap(), &flag_cipher));
+            assert!(<Fmd2 as FmdScheme>::detect(&dk.unwrap(), &flag_cipher));
         }
     }
 

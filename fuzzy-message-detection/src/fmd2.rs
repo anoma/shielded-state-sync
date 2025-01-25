@@ -464,13 +464,34 @@ impl FmdScheme for Fmd2 {
 
     fn detect(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
         let Self::FlagCiphertexts { u_1, u_2, y, c } = flag_ciphers;
+
         let bit_ciphertexts = flag_ciphers.c.decompress();
+
+        // the false positive rate isn't private so this
+        // can run in variable time
+        if dsk
+            .indices
+            .iter()
+            .copied()
+            .any(|index| index >= bit_ciphertexts.0.len())
+        {
+            return false;
+        }
+
         let m = hash_flag_ciphertexts(u_1, u_2, c);
         let w = y * u_1 + m * u_2;
+
+        // however, when dealing with key material, we should only
+        // perform constant time ops
         let mut success = 1u8;
         for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
             let k_i = hash_to_flag_ciphertext_bit(u_1, u_2, &(u_1 * xi), &w);
-            success = black_box(success & k_i ^ bit_ciphertexts.0[*index])
+            let flag_bit = unsafe {
+                // SAFETY: we have asserted that no index within the dsk has
+                // a value greater than the length of the bit ciphertexts
+                *bit_ciphertexts.0.get_unchecked(*index)
+            };
+            success = black_box(success & k_i ^ flag_bit)
         }
 
         success == 1u8
@@ -483,6 +504,22 @@ impl CcaSecure for Fmd2 {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_flag_detect_out_of_bounds() {
+        let mut csprng = rand_core::OsRng;
+
+        let rates = RestrictedRateSet::new(8);
+        let (_, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+        let dk =
+            <Fmd2 as FmdScheme>::extract(&sk, &(0..rates.gamma()).collect::<Vec<_>>()).unwrap();
+
+        let rates = RestrictedRateSet::new(2);
+        let (pk, _) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+
+        let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
+        assert!(!<Fmd2 as FmdScheme>::detect(&dk, &flag_cipher));
+    }
 
     #[test]
     fn test_flag_detect() {

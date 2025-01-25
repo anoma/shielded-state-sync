@@ -321,7 +321,7 @@ pub struct FlagCiphertexts {
 
 impl FlagCiphertexts {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut output = Vec::with_capacity(32 + 32 + self.c.0.len());
+        let mut output = Vec::with_capacity(96 + self.c.0.len());
 
         output.extend_from_slice(&self.u_1.compress().to_bytes());
         output.extend_from_slice(&self.u_2.compress().to_bytes());

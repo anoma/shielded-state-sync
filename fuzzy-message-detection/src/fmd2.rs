@@ -380,7 +380,8 @@ impl FlagCiphertexts {
             pk.keys
                 .iter()
                 .map(|pk_i| {
-                    let k_i = hash_to_flag_ciphertext_bit(&u_1, &u_2, &(pk_i * r_1), &w);
+                    let k_i =
+                        hash_to_flag_ciphertext_bit(&u_1, &u_2, &(pk_i * r_1), &(pk_i * r_2), &w);
                     k_i ^ 1u8 // Encrypt bit 1 with hashed mask k_i.
                 })
                 .collect(),
@@ -400,14 +401,16 @@ impl FlagCiphertexts {
 fn hash_to_flag_ciphertext_bit(
     u_1: &RistrettoPoint,
     u_2: &RistrettoPoint,
-    ddh_mask: &RistrettoPoint,
+    ddh_mask_1: &RistrettoPoint,
+    ddh_mask_2: &RistrettoPoint,
     w: &RistrettoPoint,
 ) -> u8 {
     let mut hasher = Sha256::new();
 
     hasher.update(u_1.compress().to_bytes());
     hasher.update(u_2.compress().to_bytes());
-    hasher.update(ddh_mask.compress().to_bytes());
+    hasher.update(ddh_mask_1.compress().to_bytes());
+    hasher.update(ddh_mask_2.compress().to_bytes());
     hasher.update(w.compress().to_bytes());
 
     hasher.finalize().as_slice()[0] & 1u8
@@ -485,7 +488,7 @@ impl FmdScheme for Fmd2 {
         // perform constant time ops
         let mut success = 1u8;
         for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
-            let k_i = hash_to_flag_ciphertext_bit(u_1, u_2, &(u_1 * xi), &w);
+            let k_i = hash_to_flag_ciphertext_bit(u_1, u_2, &(u_1 * xi), &(u_2 * xi), &w);
             let flag_bit = unsafe {
                 // SAFETY: we have asserted that no index within the dsk has
                 // a value greater than the length of the bit ciphertexts

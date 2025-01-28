@@ -201,6 +201,18 @@ impl PublicKey {
             keys,
         })
     }
+
+    pub fn diversifier(&self) -> &RistrettoPoint {
+        &self.div
+    }
+
+    pub fn gamma_keys(&self) -> &[RistrettoPoint] {
+        &self.keys
+    }
+
+    pub fn gamma(&self) -> usize {
+        self.keys.len()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -273,10 +285,14 @@ impl DetectionKey {
 /// Compressed representation of the γ bit-ciphertexts of a [`FlagCiphertext`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-struct CompressedCiphertext(Vec<u8>);
+pub struct CompressedCiphertext(Vec<u8>);
 
 impl CompressedCiphertext {
-    fn decompress(&self) -> Ciphertext {
+    pub fn bits(&self) -> &[u8] {
+        &self.0
+    }
+
+    pub fn decompress(&self) -> Ciphertext {
         let mut bit_ciphertexts = Vec::with_capacity(self.0.len() * 8);
         for byte in self.0.iter() {
             for i in 0..8 {
@@ -291,10 +307,14 @@ impl CompressedCiphertext {
 /// Decompressed inner bit-ciphertexts of a [`FlagCiphertext`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-struct Ciphertext(Vec<u8>);
+pub struct Ciphertext(Vec<u8>);
 
 impl Ciphertext {
-    fn compress(&self) -> CompressedCiphertext {
+    pub fn bits(&self) -> &[u8] {
+        &self.0
+    }
+
+    pub fn compress(&self) -> CompressedCiphertext {
         CompressedCiphertext(
             self.0
                 .chunks(8)
@@ -394,6 +414,22 @@ impl FlagCiphertexts {
         let y = (z - m) * r_1_inv * r_2;
 
         Self { u_1, u_2, y, c }
+    }
+
+    pub fn u_1(&self) -> &RistrettoPoint {
+        &self.u_1
+    }
+
+    pub fn u_2(&self) -> &RistrettoPoint {
+        &self.u_2
+    }
+
+    pub fn y(&self) -> &Scalar {
+        &self.y
+    }
+
+    pub fn c(&self) -> &CompressedCiphertext {
+        &self.c
     }
 }
 

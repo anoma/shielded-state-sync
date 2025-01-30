@@ -10,7 +10,7 @@ use curve25519_dalek::{
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256, Sha512};
 
-use crate::{CcaSecure, FmdScheme, RestrictedRateSet};
+use crate::{CcaSecure, FmdKeyGen, FmdScheme, RestrictedRateSet};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -160,14 +160,10 @@ fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar
 
 pub struct Fmd2;
 
-impl FmdScheme for Fmd2 {
+impl FmdKeyGen for Fmd2 {
     type PublicKey = PublicKey;
 
     type SecretKey = SecretKey;
-
-    type DetectionKey = DetectionKey;
-
-    type FlagCiphertexts = FlagCiphertexts;
 
     fn generate_keys<R: RngCore + CryptoRng>(
         rates: &RestrictedRateSet,
@@ -183,6 +179,16 @@ impl FmdScheme for Fmd2 {
 
         (pk, sk)
     }
+}
+
+impl FmdScheme for Fmd2 {
+    type PublicKey = PublicKey;
+
+    type SecretKey = SecretKey;
+
+    type DetectionKey = DetectionKey;
+
+    type FlagCiphertexts = FlagCiphertexts;
 
     fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts {
         FlagCiphertexts::generate_flag(pk, rng)
@@ -219,7 +225,7 @@ mod tests {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);
-        let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+        let (pk, sk) = <Fmd2 as FmdKeyGen>::generate_keys(&rates, &mut csprng);
         let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
         let dk = <Fmd2 as FmdScheme>::extract(&sk, &(0..rates.gamma()).collect::<Vec<_>>());
         assert!(<Fmd2 as FmdScheme>::detect(&dk.unwrap(), &flag_cipher));
@@ -231,7 +237,7 @@ mod tests {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);
-        let (_pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+        let (_pk, sk) = <Fmd2 as FmdKeyGen>::generate_keys(&rates, &mut csprng);
 
         assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 0, 1]).is_none());
         assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 1, 2, 3, 4, 5, 6]).is_none());
@@ -243,7 +249,7 @@ mod tests {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);
-        let (pk, sk) = <Fmd2 as FmdScheme>::generate_keys(&rates, &mut csprng);
+        let (pk, sk) = <Fmd2 as FmdKeyGen>::generate_keys(&rates, &mut csprng);
         for _i in 0..10 {
             let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
             let dk = <Fmd2 as FmdScheme>::extract(&sk, &[0, 2, 4]);

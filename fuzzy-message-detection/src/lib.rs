@@ -11,22 +11,27 @@ pub trait FmdScheme {
     type DetectionKey;
     type FlagCiphertexts;
 
-    /// Generate keys according to the false positive rate set.
-    fn generate_keys<R: RngCore + CryptoRng>(
-        rates: &RestrictedRateSet,
-        rng: &mut R,
-    ) -> (Self::PublicKey, Self::SecretKey);
-
     fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts;
 
     /// The number of (secret key) indices gives the chosen false positive rate.
-    /// Sould return `None` if the number of indices is larger than the
+    /// Should return `None` if the number of indices is larger than the
     /// γ parameter of the [RestrictedRateSet] used in
-    /// [generate_keys](FmdScheme::generate_keys).
+    /// [generate_keys](FmdKeyGen::generate_keys).
     fn extract(sk: &Self::SecretKey, indices: &[usize]) -> Option<Self::DetectionKey>;
 
     /// Probabilistic detection based on the number of secret keys embedded in the detection key.
     fn detect(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool;
+}
+
+pub trait FmdKeyGen {
+    type PublicKey;
+    type SecretKey;
+
+     /// Generate keys according to the minimum false positive rate γ.
+     fn generate_keys<R: RngCore + CryptoRng>(
+        rates: &RestrictedRateSet,
+        rng: &mut R,
+    ) -> (Self::PublicKey, Self::SecretKey);
 }
 
 /// For given integer γ > 0, the set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  

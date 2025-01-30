@@ -215,7 +215,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_flag_test() {
+    fn test_flag_detect() {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);
@@ -239,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn test_flag_test_with_partial_detection_key() {
+    fn test_flag_detect_with_partial_detection_key() {
         let mut csprng = rand_core::OsRng;
 
         let rates = RestrictedRateSet::new(5);

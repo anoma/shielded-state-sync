@@ -4,7 +4,7 @@ use rand_core::{CryptoRng, RngCore};
 
 /// A trait for a Fuzzy Message Detection (FMD) scheme with restricted false positive rates.
 ///
-/// We slightly modify the signature of [extract](FmdScheme::extract): detection keys are any ordered subset of the γ secret keys, along with their indices. This means that an implementation of [test](FmdScheme::test) should decrypt the flag ciphertexts in the positions given by those indices.
+/// We slightly modify the signature of [extract](FmdScheme::extract): detection keys are any ordered subset of the γ secret keys, along with their indices. This means that an implementation of [detect](FmdScheme::detect) should decrypt the flag ciphertexts in the positions given by those indices.
 pub trait FmdScheme {
     type PublicKey;
     type SecretKey;

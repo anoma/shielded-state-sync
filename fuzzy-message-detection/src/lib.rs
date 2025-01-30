@@ -25,7 +25,8 @@ pub trait FmdScheme {
     /// [generate_keys](FmdScheme::generate_keys).
     fn extract(sk: &Self::SecretKey, indices: &[usize]) -> Option<Self::DetectionKey>;
 
-    fn test(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool;
+    /// Probabilistic detection based on the number of secret keys embedded in the detection key.
+    fn detect(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool;
 }
 
 /// For given integer γ > 0, the set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  

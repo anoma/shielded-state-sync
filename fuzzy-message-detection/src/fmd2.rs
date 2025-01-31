@@ -32,7 +32,7 @@ pub struct FlagCiphertexts {
 
 impl From<GenericFlagCiphertexts> for FlagCiphertexts {
     fn from(value: GenericFlagCiphertexts) -> Self {
-        FlagCiphertexts { u: value.get_u(), y: value.get_y(), c: value.get_c() } // Ignore basepoint.
+        FlagCiphertexts { u: value.u, y: value.y, c: value.c } // Ignore basepoint.
     }
 }
 

@@ -49,10 +49,10 @@ impl TrapdoorBasepoint {
 
 #[derive(Debug, Clone)]
 pub(crate) struct GenericFlagCiphertexts {
-    basepoint_ch: RistrettoPoint, // Basepoint for the Chamaleon Hash.
-    u: RistrettoPoint,
-    y: Scalar,
-    c: Vec<u8>,
+    pub(crate) basepoint_ch: RistrettoPoint, // Basepoint for the Chamaleon Hash.
+    pub(crate) u: RistrettoPoint,
+    pub(crate) y: Scalar,
+    pub(crate) c: Vec<u8>,
 }
 
 impl GenericFlagCiphertexts {
@@ -103,18 +103,6 @@ impl GenericFlagCiphertexts {
             y, 
             c 
         }
-    }
-
-    pub(crate) fn get_u(&self) -> RistrettoPoint {
-        self.u
-    }
-
-    pub(crate) fn get_y(&self) -> Scalar {
-        self.y
-    }
-
-    pub(crate) fn get_c(&self) -> Vec<u8> {
-        self.c.clone()
     }
 
     /// Compressed representation of the γ bit-ciphertexts of an GenericFlagCiphertext.

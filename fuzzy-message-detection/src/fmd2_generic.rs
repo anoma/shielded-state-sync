@@ -110,11 +110,11 @@ impl GenericFlagCiphertexts {
     }
 
     pub(crate) fn get_u(&self) -> RistrettoPoint {
-        self.u.clone()
+        self.u
     }
 
     pub(crate) fn get_y(&self) -> Scalar {
-        self.y.clone()
+        self.y
     }
 
     pub(crate) fn get_c(&self) -> Vec<u8> {

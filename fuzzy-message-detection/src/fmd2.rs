@@ -1,4 +1,4 @@
-//! The FMD2 scheme specified in Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
+//! The FMD2 scheme.
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -7,26 +7,33 @@ use alloc::collections::BTreeSet;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
+
 use rand_core::{CryptoRng, RngCore};
-use sha2::{Digest, Sha256, Sha512};
 
-use crate::{CcaSecure, FmdKeyGen, FmdScheme, RestrictedRateSet};
-
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct SecretKey(Vec<Scalar>);
+use crate::{
+    fmd2_generic::{GenericFlagCiphertexts, GenericPublicKey, TrapdoorBasepoint}, 
+    SecretKey, DetectionKey, CcaSecure, FmdKeyGen, FmdScheme};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// γ points. The basepoint is hardcoded to the Ristretto basepoint.
 pub struct PublicKey {
     keys: Vec<RistrettoPoint>,
 }
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DetectionKey {
-    indices: Vec<usize>,
-    keys: Vec<Scalar>,
+/// A point `u`, a scalar `y`, and γ ciphertext bits `c`.
+pub struct FlagCiphertexts {
+    u: RistrettoPoint,
+    y: Scalar,
+    c: Vec<u8>,
+}
+
+impl From<GenericFlagCiphertexts> for FlagCiphertexts {
+    fn from(value: GenericFlagCiphertexts) -> Self {
+        FlagCiphertexts { u: value.get_u(), y: value.get_y(), c: value.get_c() } // Ignore basepoint.
+    }
 }
 
 impl SecretKey {
@@ -69,107 +76,36 @@ impl SecretKey {
     }
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FlagCiphertexts {
-    u: RistrettoPoint,
-    y: Scalar,
-    c: Vec<u8>,
+
+/// The γ > 0 parameter. 
+/// The set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
+pub struct Fmd2Params {
+    gamma: usize,
 }
 
-impl FlagCiphertexts {
-    fn generate_flag<R: RngCore + CryptoRng>(pk: &PublicKey, rng: &mut R) -> Self {
-        let r = Scalar::random(rng);
-        let z = Scalar::random(rng);
-        let u = RISTRETTO_BASEPOINT_POINT * r;
-        let w = RISTRETTO_BASEPOINT_POINT * z;
+impl Fmd2Params {
 
-        let bit_ciphertexts: Vec<bool> = pk
-            .keys
-            .iter()
-            .map(|pk_i| {
-                let k_i = hash_to_flag_ciphertext_bit(&u, &(pk_i * r), &w);
-                !k_i // Encrypt bit 1 with hashed mask k_i.
-            })
-            .collect();
-
-        let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
-
-        let r_inv = r.invert();
-        let y = (z - m) * r_inv;
-
-        let c = FlagCiphertexts::to_bytes(&bit_ciphertexts);
-
-        Self { u, y, c }
+    /// Generate keys according to the minimum false positive rate γ.
+    pub fn new(gamma: usize) -> Fmd2Params {
+        Fmd2Params { gamma }
     }
 
-    /// Compressed representation of the γ bit-ciphertexts of a FlagCiphertext.
-    fn to_bytes(bit_ciphertexts: &[bool]) -> Vec<u8> {
-        let c: Vec<u8> = bit_ciphertexts
-            .chunks(8)
-            .map(|bits| {
-                let mut byte = 0u8;
-                for (i, bit) in bits.iter().enumerate() {
-                    if *bit {
-                        byte ^= 1u8 << i
-                    }
-                }
-                byte
-            })
-            .collect();
-        c
-    }
-
-    /// Decompress the inner bit-ciphertexts of this FlagCiphertext.
-    fn to_bits(&self) -> Vec<bool> {
-        let mut bit_ciphertexts: Vec<bool> = Vec::new();
-        for byte in self.c.iter() {
-            for i in 0..8 {
-                bit_ciphertexts.push(1u8 == (byte >> i) & 1u8);
-            }
-        }
-
-        bit_ciphertexts
+    /// Returns the γ parameter
+    pub fn gamma(&self) -> usize {
+        self.gamma
     }
 }
 
-/// This is the hash H from Fig.3 of the FMD paper, instantiated with SHA256.
-fn hash_to_flag_ciphertext_bit(
-    u: &RistrettoPoint,
-    ddh_mask: &RistrettoPoint,
-    w: &RistrettoPoint,
-) -> bool {
-    let mut hasher = Sha256::new();
-
-    hasher.update(u.compress().to_bytes());
-    hasher.update(ddh_mask.compress().to_bytes());
-    hasher.update(w.compress().to_bytes());
-
-    let k_i_byte = hasher.finalize().as_slice()[0] & 1u8;
-
-    k_i_byte == 1u8
-}
-
-/// This is the hash G from Fig.3 of the FMD paper, instantiated with SHA512.
-fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar {
-    let mut m_bytes = u.compress().to_bytes().to_vec();
-    m_bytes.extend_from_slice(&FlagCiphertexts::to_bytes(bit_ciphertexts));
-
-    Scalar::hash_from_bytes::<Sha512>(&m_bytes)
-}
-
-pub struct Fmd2;
-
-impl FmdKeyGen for Fmd2 {
+impl FmdKeyGen for Fmd2Params {
     type PublicKey = PublicKey;
 
     type SecretKey = SecretKey;
 
     fn generate_keys<R: RngCore + CryptoRng>(
-        rates: &RestrictedRateSet,
+        &self,
         rng: &mut R,
     ) -> (Self::PublicKey, Self::SecretKey) {
-        let gamma = rates.gamma();
+        let gamma = self.gamma();
 
         // Secret key.
         let sk = SecretKey::generate_keys(gamma, rng);
@@ -177,44 +113,48 @@ impl FmdKeyGen for Fmd2 {
         // Public key.
         let pk = sk.generate_public_key();
 
-        (pk, sk)
+        (pk,sk)
     }
 }
+
+/// The implementation from Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
+pub struct Fmd2;
 
 impl FmdScheme for Fmd2 {
     type PublicKey = PublicKey;
 
-    type SecretKey = SecretKey;
-
-    type DetectionKey = DetectionKey;
-
     type FlagCiphertexts = FlagCiphertexts;
 
     fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts {
-        FlagCiphertexts::generate_flag(pk, rng)
+        let gpk = GenericPublicKey{ basepoint_eg: RISTRETTO_BASEPOINT_POINT, keys: pk.keys.clone() };
+
+        GenericFlagCiphertexts::generate_flag(
+            &gpk, 
+            &TrapdoorBasepoint::new(&gpk, &Scalar::ONE), 
+            rng
+        ).into()
     }
 
-    fn extract(sk: &Self::SecretKey, indices: &[usize]) -> Option<Self::DetectionKey> {
+    fn extract(sk: &SecretKey, indices: &[usize]) -> Option<DetectionKey> {
+        
         sk.extract(indices)
     }
 
-    fn detect(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
-        let u = flag_ciphers.u;
-        let bit_ciphertexts = flag_ciphers.to_bits();
-        let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
-        let w = RISTRETTO_BASEPOINT_POINT * m + flag_ciphers.u * flag_ciphers.y;
-        let mut success = true;
-        for (xi, index) in dsk.keys.iter().zip(dsk.indices.iter()) {
-            let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
-            success = success && k_i != bit_ciphertexts[*index]
-        }
+    fn detect(dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
 
-        success
+        let gfc = GenericFlagCiphertexts::new(
+            &RISTRETTO_BASEPOINT_POINT, 
+            &RISTRETTO_BASEPOINT_POINT,
+            &flag_ciphers.u, 
+            &flag_ciphers.y, 
+            &flag_ciphers.c);
+
+        dsk.detect(&gfc)
     }
 }
 
 /// FMD2 is proven to be IND-CCA secure in the [FMD paper](https://eprint.iacr.org/2021/089).
-impl CcaSecure for Fmd2 {}
+impl CcaSecure for Fmd2Params {}
 
 #[cfg(test)]
 mod tests {
@@ -224,10 +164,10 @@ mod tests {
     fn test_flag_detect() {
         let mut csprng = rand_core::OsRng;
 
-        let rates = RestrictedRateSet::new(5);
-        let (pk, sk) = <Fmd2 as FmdKeyGen>::generate_keys(&rates, &mut csprng);
+        let pp = Fmd2Params::new(5);
+        let (pk, sk) = pp.generate_keys(&mut csprng);
         let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
-        let dk = <Fmd2 as FmdScheme>::extract(&sk, &(0..rates.gamma()).collect::<Vec<_>>());
+        let dk = <Fmd2 as FmdScheme>::extract(&sk, &(0..pp.gamma()).collect::<Vec<_>>());
         assert!(<Fmd2 as FmdScheme>::detect(&dk.unwrap(), &flag_cipher));
     }
 
@@ -236,8 +176,8 @@ mod tests {
     fn test_extract_checks() {
         let mut csprng = rand_core::OsRng;
 
-        let rates = RestrictedRateSet::new(5);
-        let (_pk, sk) = <Fmd2 as FmdKeyGen>::generate_keys(&rates, &mut csprng);
+        let pp = Fmd2Params::new(5);
+        let (_pk, sk) = pp.generate_keys(&mut csprng);
 
         assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 0, 1]).is_none());
         assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 1, 2, 3, 4, 5, 6]).is_none());
@@ -248,8 +188,8 @@ mod tests {
     fn test_flag_detect_with_partial_detection_key() {
         let mut csprng = rand_core::OsRng;
 
-        let rates = RestrictedRateSet::new(5);
-        let (pk, sk) = <Fmd2 as FmdKeyGen>::generate_keys(&rates, &mut csprng);
+        let pp = Fmd2Params::new(5);
+        let (pk, sk) = pp.generate_keys(&mut csprng);
         for _i in 0..10 {
             let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
             let dk = <Fmd2 as FmdScheme>::extract(&sk, &[0, 2, 4]);

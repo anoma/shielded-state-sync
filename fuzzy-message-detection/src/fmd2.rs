@@ -142,8 +142,7 @@ impl FmdScheme for Fmd2 {
 
     fn detect(dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
 
-        let gfc = GenericFlagCiphertexts::new(
-            &RISTRETTO_BASEPOINT_POINT, 
+        let gfc = GenericFlagCiphertexts::new( 
             &RISTRETTO_BASEPOINT_POINT,
             &flag_ciphers.u, 
             &flag_ciphers.y, 

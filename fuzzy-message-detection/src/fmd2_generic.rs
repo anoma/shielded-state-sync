@@ -49,7 +49,6 @@ impl TrapdoorBasepoint {
 
 #[derive(Debug, Clone)]
 pub(crate) struct GenericFlagCiphertexts {
-    basepoint_eg: RistrettoPoint, // ElGamal basepoint.
     basepoint_ch: RistrettoPoint, // Basepoint for the Chamaleon Hash.
     u: RistrettoPoint,
     y: Scalar,
@@ -58,7 +57,6 @@ pub(crate) struct GenericFlagCiphertexts {
 
 impl GenericFlagCiphertexts {
     pub(crate) fn new(
-        basepoint_eg: &RistrettoPoint, 
         basepoint_ch: &RistrettoPoint,
         u: &RistrettoPoint, 
         y: &Scalar, 
@@ -66,7 +64,6 @@ impl GenericFlagCiphertexts {
     -> GenericFlagCiphertexts {
 
         GenericFlagCiphertexts {
-            basepoint_eg: *basepoint_eg,
             basepoint_ch: *basepoint_ch,
             u: *u,
             y: *y,
@@ -101,7 +98,6 @@ impl GenericFlagCiphertexts {
         let c = GenericFlagCiphertexts::to_bytes(&bit_ciphertexts);
 
         Self { 
-            basepoint_eg: pk.basepoint_eg, 
             basepoint_ch: basepoint_ch.b,
             u, 
             y, 

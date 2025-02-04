@@ -43,7 +43,7 @@ impl SecretKey {
         Self(keys)
     }
 
-    fn extract(&self, indices: &[usize]) -> Option<DetectionKey> {
+    pub(crate) fn extract(&self, indices: &[usize]) -> Option<DetectionKey> {
         // check that input indices are distinct
         let index_set = BTreeSet::from_iter(indices);
         if index_set.len() != indices.len() {

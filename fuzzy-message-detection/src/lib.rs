@@ -1,46 +1,75 @@
+pub mod fmd2_poly;
 extern crate alloc;
+pub(crate) mod fmd2_generic;
 pub mod fmd2;
+use curve25519_dalek::Scalar;
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// A trait for a Fuzzy Message Detection (FMD) scheme with restricted false positive rates.
 ///
-/// We slightly modify the signature of [extract](FmdScheme::extract): detection keys are any ordered subset of the γ secret keys, along with their indices. This means that an implementation of [test](FmdScheme::test) should decrypt the flag ciphertexts in the positions given by those indices.
+/// We slightly modify the signature of [extract](FmdScheme::extract): detection keys are any ordered subset of the γ secret keys, along with their indices. This means that an implementation of [detect](FmdScheme::detect) should decrypt the flag ciphertexts in the positions given by those indices.
 pub trait FmdScheme {
     type PublicKey;
-    type SecretKey;
-    type DetectionKey;
     type FlagCiphertexts;
-
-    /// Generate keys according to the false positive rate set.
-    fn generate_keys<R: RngCore + CryptoRng>(
-        rates: &RestrictedRateSet,
-        rng: &mut R,
-    ) -> (Self::PublicKey, Self::SecretKey);
 
     fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts;
 
     /// The number of (secret key) indices gives the chosen false positive rate.
-    /// Sould return `None` if the number of indices is larger than the
-    /// γ parameter of the [RestrictedRateSet] used in
-    /// [generate_keys](FmdScheme::generate_keys).
-    fn extract(sk: &Self::SecretKey, indices: &[usize]) -> Option<Self::DetectionKey>;
+    /// Should return `None` if the number of indices is larger than the
+    /// γ parameter of the FMD scheme.
+    fn extract(sk: &SecretKey, indices: &[usize]) -> Option<DetectionKey>;
 
     /// Probabilistic detection based on the number of secret keys embedded in the detection key.
-    fn detect(dsk: &Self::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool;
+    fn detect(dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool;
 }
 
-/// For given integer γ > 0, the set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
-pub struct RestrictedRateSet(usize);
+/// A trait to generate the keypair of the FMD scheme.
+/// 
+/// Depending on implementations, the keypair can be compact (i.e. less than γ points/scalars).
+pub trait FmdKeyGen {
+    type PublicKey;
+    type SecretKey;
 
-impl RestrictedRateSet {
-    pub fn new(gamma: usize) -> Self {
-        Self(gamma)
-    }
+    fn generate_keys<R: RngCore + CryptoRng>(
+        &self, 
+        rng: &mut R,
+    ) -> (Self::PublicKey, Self::SecretKey);
+}
 
-    /// Returns the γ parameter
-    pub fn gamma(&self) -> usize {
-        self.0
-    }
+/// A trait to derive onto FMD keypairs.
+pub trait Derive: FmdKeyGen+FmdScheme {
+
+    fn derive(&self, parent_sk: &<Self as FmdKeyGen>::SecretKey, parent_pk: &<Self as FmdKeyGen>::PublicKey) -> (SecretKey,<Self as FmdScheme>::PublicKey);
+
+    fn derive_publicly(&self,parent_pk: &<Self as FmdKeyGen>::PublicKey) -> <Self as FmdScheme>::PublicKey;
+}
+
+/// A trait to diversify keys.
+/// 
+/// A diversification must be correct and unlinkable in the following sense.
+/// 
+/// - Correctness with respect derivation: deriving from any two diversified 
+/// public keys yields public keys associated to the same secret key.   
+// One way to achieve correctness is ensuring the following:
+// 
+//   (sk1,pk1)----diversify----> pk2
+//      |                         |
+//      |                         |
+//    derive                derive_publicly
+//      |                         |   
+//      |                         |
+//      \/                        \/
+//  (sk3,pk3)                    pk4 such that sk3 = secret_key(pk4)
+/// 
+/// - Unlinkability: it is not possible to tell whether any two public keys 
+/// where diversified from the same input keypair.
+pub trait Diversify: FmdKeyGen {
+
+    /// Diversifies from the input secret key. The diversifed public key is bound 
+    /// to the tag (different tags yield different diversified public keys).
+    fn diversify(sk: &<Self as FmdKeyGen>::SecretKey, diversifier_tag: &[u8]) -> <Self as FmdKeyGen>::PublicKey;
 }
 
 /// A marker trait used to indicate that
@@ -49,3 +78,20 @@ impl RestrictedRateSet {
 /// Only IND-CCA secure schemes should be used, as they ensure
 /// generated ciphertext flags are non-malleable.
 pub trait CcaSecure {}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// γ secret keys (scalars). For minimum false-positive rate p:=2^{-γ}.
+pub struct SecretKey(pub(crate) Vec<Scalar>);
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// A subset of n-out-γ secret keys and the positions
+/// they occupy in [SecretKey].
+pub struct DetectionKey {
+    
+    pub(crate) keys: Vec<Scalar>,
+
+    pub(crate) indices: Vec<usize>,
+    
+}

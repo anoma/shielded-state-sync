@@ -11,8 +11,9 @@ use curve25519_dalek::{
 use rand_core::{CryptoRng, RngCore};
 
 use crate::{
-    fmd2_generic::{GenericFlagCiphertexts, GenericPublicKey, TrapdoorBasepoint}, 
-    SecretKey, DetectionKey, CcaSecure, FmdKeyGen, FmdScheme};
+    fmd2_generic::{GenericFlagCiphertexts, GenericPublicKey, TrapdoorBasepoint},
+    CcaSecure, DetectionKey, FmdKeyGen, FmdScheme, SecretKey,
+};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -32,7 +33,11 @@ pub struct FlagCiphertexts {
 
 impl From<GenericFlagCiphertexts> for FlagCiphertexts {
     fn from(value: GenericFlagCiphertexts) -> Self {
-        FlagCiphertexts { u: value.u, y: value.y, c: value.c } // Ignore basepoint.
+        FlagCiphertexts {
+            u: value.u,
+            y: value.y,
+            c: value.c,
+        } // Ignore basepoint.
     }
 }
 
@@ -76,15 +81,13 @@ impl SecretKey {
     }
 }
 
-
-/// The γ > 0 parameter. 
+/// The γ > 0 parameter.
 /// The set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
 pub struct Fmd2Params {
     gamma: usize,
 }
 
 impl Fmd2Params {
-
     /// Generate keys according to the minimum false positive rate γ.
     pub fn new(gamma: usize) -> Fmd2Params {
         Fmd2Params { gamma }
@@ -113,7 +116,7 @@ impl FmdKeyGen for Fmd2Params {
         // Public key.
         let pk = sk.generate_public_key();
 
-        (pk,sk)
+        (pk, sk)
     }
 }
 
@@ -126,27 +129,30 @@ impl FmdScheme for Fmd2 {
     type FlagCiphertexts = FlagCiphertexts;
 
     fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts {
-        let gpk = GenericPublicKey{ basepoint_eg: RISTRETTO_BASEPOINT_POINT, keys: pk.keys.clone() };
+        let gpk = GenericPublicKey {
+            basepoint_eg: RISTRETTO_BASEPOINT_POINT,
+            keys: pk.keys.clone(),
+        };
 
         GenericFlagCiphertexts::generate_flag(
-            &gpk, 
-            &TrapdoorBasepoint::new(&gpk, &Scalar::ONE), 
-            rng
-        ).into()
+            &gpk,
+            &TrapdoorBasepoint::new(&gpk, &Scalar::ONE),
+            rng,
+        )
+        .into()
     }
 
     fn extract(sk: &SecretKey, indices: &[usize]) -> Option<DetectionKey> {
-        
         sk.extract(indices)
     }
 
     fn detect(dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
-
-        let gfc = GenericFlagCiphertexts::new( 
+        let gfc = GenericFlagCiphertexts::new(
             &RISTRETTO_BASEPOINT_POINT,
-            &flag_ciphers.u, 
-            &flag_ciphers.y, 
-            &flag_ciphers.c);
+            &flag_ciphers.u,
+            &flag_ciphers.y,
+            &flag_ciphers.c,
+        );
 
         dsk.detect(&gfc)
     }

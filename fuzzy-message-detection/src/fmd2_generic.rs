@@ -7,8 +7,6 @@ use sha2::{Digest, Sha256, Sha512};
 
 use crate::DetectionKey;
 
-
-
 #[derive(Debug, Clone)]
 pub(crate) struct GenericPublicKey {
     pub(crate) basepoint_eg: RistrettoPoint, // Basepoint to generate the DDH mask (for ElGamal).
@@ -16,7 +14,6 @@ pub(crate) struct GenericPublicKey {
 }
 
 impl DetectionKey {
-
     pub(crate) fn detect(&self, flag_ciphers: &GenericFlagCiphertexts) -> bool {
         let u = flag_ciphers.u;
         let bit_ciphertexts = flag_ciphers.to_bits();
@@ -38,11 +35,10 @@ pub(crate) struct TrapdoorBasepoint {
 }
 
 impl TrapdoorBasepoint {
-
     pub(crate) fn new(pk: &GenericPublicKey, trapdoor: &Scalar) -> TrapdoorBasepoint {
-        TrapdoorBasepoint{
+        TrapdoorBasepoint {
             b: pk.basepoint_eg * trapdoor,
-            t: *trapdoor
+            t: *trapdoor,
         }
     }
 }
@@ -58,24 +54,23 @@ pub(crate) struct GenericFlagCiphertexts {
 impl GenericFlagCiphertexts {
     pub(crate) fn new(
         basepoint_ch: &RistrettoPoint,
-        u: &RistrettoPoint, 
-        y: &Scalar, 
-        c: &[u8]) 
-    -> GenericFlagCiphertexts {
-
+        u: &RistrettoPoint,
+        y: &Scalar,
+        c: &[u8],
+    ) -> GenericFlagCiphertexts {
         GenericFlagCiphertexts {
             basepoint_ch: *basepoint_ch,
             u: *u,
             y: *y,
-            c: c.to_vec()
+            c: c.to_vec(),
         }
     }
 
     pub(crate) fn generate_flag<R: RngCore + CryptoRng>(
-        pk: &GenericPublicKey, 
-        basepoint_ch: &TrapdoorBasepoint, 
-        rng: &mut R) 
-    -> Self {
+        pk: &GenericPublicKey,
+        basepoint_ch: &TrapdoorBasepoint,
+        rng: &mut R,
+    ) -> Self {
         let r = Scalar::random(rng);
         let z = Scalar::random(rng);
         let u = pk.basepoint_eg * r;
@@ -97,11 +92,11 @@ impl GenericFlagCiphertexts {
 
         let c = GenericFlagCiphertexts::to_bytes(&bit_ciphertexts);
 
-        Self { 
+        Self {
             basepoint_ch: basepoint_ch.b,
-            u, 
-            y, 
-            c 
+            u,
+            y,
+            c,
         }
     }
 

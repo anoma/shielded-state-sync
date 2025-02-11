@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use fuzzy_message_detection::{
-    fmd2::{Fmd2Params,Fmd2}, 
-    FmdKeyGen, FmdScheme
+    fmd2::{Fmd2, Fmd2Params},
+    FmdKeyGen, FmdScheme,
 };
 
 fn benchmark_flag(c: &mut Criterion) {

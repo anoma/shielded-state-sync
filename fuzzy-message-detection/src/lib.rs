@@ -1,6 +1,6 @@
 extern crate alloc;
-pub(crate) mod fmd2_generic;
 pub mod fmd2;
+pub(crate) mod fmd2_generic;
 use curve25519_dalek::Scalar;
 use rand_core::{CryptoRng, RngCore};
 #[cfg(feature = "serde")]
@@ -26,14 +26,14 @@ pub trait FmdScheme {
 }
 
 /// A trait to generate the keypair of the FMD scheme.
-/// 
+///
 /// Depending on implementations, the keypair can be compact (i.e. less than γ points/scalars).
 pub trait FmdKeyGen {
     type PublicKey;
     type SecretKey;
 
-     fn generate_keys<R: RngCore + CryptoRng>(
-        &self, 
+    fn generate_keys<R: RngCore + CryptoRng>(
+        &self,
         rng: &mut R,
     ) -> (Self::PublicKey, Self::SecretKey);
 }
@@ -55,9 +55,7 @@ pub struct SecretKey(pub(crate) Vec<Scalar>);
 /// A subset of n-out-γ secret keys and the positions
 /// they occupy in [SecretKey].
 pub struct DetectionKey {
-    
     pub(crate) keys: Vec<Scalar>,
 
     pub(crate) indices: Vec<usize>,
-    
 }

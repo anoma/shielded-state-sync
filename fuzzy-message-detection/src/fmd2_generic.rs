@@ -210,9 +210,9 @@ fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar
     Scalar::hash_from_bytes::<Sha512>(&m_bytes)
 }
 
+#[cfg(test)]
 mod tests {
     use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-
     use super::*;
 
     #[test]

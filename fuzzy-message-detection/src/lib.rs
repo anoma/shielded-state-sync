@@ -15,8 +15,7 @@ pub trait FmdScheme {
 
     /// The number of (secret key) indices gives the chosen false positive rate.
     /// Should return `None` if the number of indices is larger than the
-    /// γ parameter of the [RestrictedRateSet] used in
-    /// [generate_keys](FmdKeyGen::generate_keys).
+    /// γ parameter of the FMD scheme.
     fn extract(sk: &SecretKey, indices: &[usize]) -> Option<DetectionKey> {
         sk.extract(indices)
     }

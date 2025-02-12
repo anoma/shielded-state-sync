@@ -65,11 +65,11 @@ impl DetectionKey {
     pub(crate) fn detect(&self, flag_ciphers: &GenericFlagCiphertexts) -> bool {
         let u = flag_ciphers.u;
         let bit_ciphertexts = flag_ciphers.to_bits();
-        let m = crate::fmd2_generic::hash_flag_ciphertexts(&u, &bit_ciphertexts);
+        let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
         let w = flag_ciphers.basepoint_ch * m + flag_ciphers.u * flag_ciphers.y;
         let mut success = true;
         for (xi, index) in self.keys.iter().zip(self.indices.iter()) {
-            let k_i = crate::fmd2_generic::hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
+            let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
             success = success && k_i != bit_ciphertexts[*index]
         }
 

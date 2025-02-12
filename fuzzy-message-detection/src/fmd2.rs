@@ -1,16 +1,13 @@
 //! The FMD2 scheme.
-
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
-
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use crate::{
-    fmd2_generic::{GenericFlagCiphertexts, GenericPublicKey, ChamaleonHashBasepoint},
+    fmd2_generic::{ChamaleonHashBasepoint, GenericFlagCiphertexts, GenericPublicKey},
     CcaSecure, DetectionKey, FmdKeyGen, FmdScheme, SecretKey,
 };
 

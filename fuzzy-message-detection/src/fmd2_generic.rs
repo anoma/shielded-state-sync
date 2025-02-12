@@ -1,6 +1,5 @@
 // An internal generic implementation of the FMD2 flag and detect algorithms.
 // It uses arbitrary basepoints for ElGamal encryption and the Chamaleon Hash.
-
 use std::collections::BTreeSet;
 
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -85,7 +84,7 @@ pub(crate) struct GenericPublicKey {
 
 pub(crate) struct ChamaleonHashBasepoint {
     base: RistrettoPoint, // Basepoint for the Chamaleon Hash.
-    dlog: Scalar, // Discrete log of `basepoint_ch` in base `GenericPublicKey.basepoint_eg`.
+    dlog: Scalar,         // Discrete log of `basepoint_ch` in base `GenericPublicKey.basepoint_eg`.
 }
 
 impl ChamaleonHashBasepoint {

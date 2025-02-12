@@ -1,8 +1,9 @@
 extern crate alloc;
-pub mod fmd2;
-pub(crate) mod fmd2_generic;
+
 use rand_core::{CryptoRng, RngCore};
 
+pub mod fmd2;
+pub(crate) mod fmd2_generic;
 pub use crate::fmd2_generic::{DetectionKey, SecretKey};
 /// A trait for a Fuzzy Message Detection (FMD) scheme with restricted false positive rates.
 ///

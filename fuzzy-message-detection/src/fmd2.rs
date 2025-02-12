@@ -3,7 +3,6 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use alloc::collections::BTreeSet;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
@@ -22,6 +21,14 @@ pub struct PublicKey {
     keys: Vec<RistrettoPoint>,
 }
 
+impl From<GenericPublicKey> for PublicKey {
+    fn from(value: GenericPublicKey) -> Self {
+        PublicKey {
+            keys: value.keys
+        } // Ignore basepoint.
+    }
+}
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A point `u`, a scalar `y`, and γ ciphertext bits `c`.
@@ -38,46 +45,6 @@ impl From<GenericFlagCiphertexts> for FlagCiphertexts {
             y: value.y,
             c: value.c,
         } // Ignore basepoint.
-    }
-}
-
-impl SecretKey {
-    fn generate_keys<R: RngCore + CryptoRng>(gamma: usize, rng: &mut R) -> Self {
-        let keys = (0..gamma).map(|_| Scalar::random(rng)).collect();
-
-        Self(keys)
-    }
-
-    fn extract(&self, indices: &[usize]) -> Option<DetectionKey> {
-        // check that input indices are distinct
-        let index_set = BTreeSet::from_iter(indices);
-        if index_set.len() != indices.len() {
-            return None;
-        }
-
-        // If number of indices is larger than the γ parameter.
-        if index_set.len() > self.0.len() {
-            return None;
-        }
-
-        let mut keys = Vec::with_capacity(indices.len());
-        for ix in indices {
-            keys.push(*self.0.get(*ix)?);
-        }
-
-        Some(DetectionKey {
-            indices: indices.to_vec(),
-            keys,
-        })
-    }
-
-    fn generate_public_key(&self) -> PublicKey {
-        let keys = self
-            .0
-            .iter()
-            .map(|k| k * RISTRETTO_BASEPOINT_POINT)
-            .collect();
-        PublicKey { keys }
     }
 }
 
@@ -114,9 +81,9 @@ impl FmdKeyGen for Fmd2Params {
         let sk = SecretKey::generate_keys(gamma, rng);
 
         // Public key.
-        let pk = sk.generate_public_key();
+        let pk = sk.generate_public_key(&RISTRETTO_BASEPOINT_POINT);
 
-        (pk, sk)
+        (pk.into(), sk)
     }
 }
 
@@ -142,10 +109,6 @@ impl FmdScheme for Fmd2 {
         .into()
     }
 
-    fn extract(sk: &SecretKey, indices: &[usize]) -> Option<DetectionKey> {
-        sk.extract(indices)
-    }
-
     fn detect(dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
         let gfc = GenericFlagCiphertexts::new(
             &RISTRETTO_BASEPOINT_POINT,
@@ -160,45 +123,3 @@ impl FmdScheme for Fmd2 {
 
 /// FMD2 is proven to be IND-CCA secure in the [FMD paper](https://eprint.iacr.org/2021/089).
 impl CcaSecure for Fmd2Params {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_flag_detect() {
-        let mut csprng = rand_core::OsRng;
-
-        let pp = Fmd2Params::new(5);
-        let (pk, sk) = pp.generate_keys(&mut csprng);
-        let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
-        let dk = <Fmd2 as FmdScheme>::extract(&sk, &(0..pp.gamma()).collect::<Vec<_>>());
-        assert!(<Fmd2 as FmdScheme>::detect(&dk.unwrap(), &flag_cipher));
-    }
-
-    /// Test that we perform checks on the input indices when extract flags.
-    #[test]
-    fn test_extract_checks() {
-        let mut csprng = rand_core::OsRng;
-
-        let pp = Fmd2Params::new(5);
-        let (_pk, sk) = pp.generate_keys(&mut csprng);
-
-        assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 0, 1]).is_none());
-        assert!(<Fmd2 as FmdScheme>::extract(&sk, &[0, 1, 2, 3, 4, 5, 6]).is_none());
-        assert!(<Fmd2 as FmdScheme>::extract(&sk, &[6]).is_none());
-    }
-
-    #[test]
-    fn test_flag_detect_with_partial_detection_key() {
-        let mut csprng = rand_core::OsRng;
-
-        let pp = Fmd2Params::new(5);
-        let (pk, sk) = pp.generate_keys(&mut csprng);
-        for _i in 0..10 {
-            let flag_cipher = <Fmd2 as FmdScheme>::flag(&pk, &mut csprng);
-            let dk = <Fmd2 as FmdScheme>::extract(&sk, &[0, 2, 4]);
-            assert!(<Fmd2 as FmdScheme>::detect(&dk.unwrap(), &flag_cipher));
-        }
-    }
-}

@@ -83,16 +83,16 @@ pub(crate) struct GenericPublicKey {
     pub(crate) keys: Vec<RistrettoPoint>,
 }
 
-pub(crate) struct TrapdoorBasepoint {
-    b: RistrettoPoint,
-    t: Scalar, // Dlog of b.
+pub(crate) struct ChamaleonHashBasepoint {
+    base: RistrettoPoint, // Basepoint for the Chamaleon Hash.
+    dlog: Scalar, // Discrete log of `basepoint_ch` in base `GenericPublicKey.basepoint_eg`.
 }
 
-impl TrapdoorBasepoint {
-    pub(crate) fn new(pk: &GenericPublicKey, trapdoor: &Scalar) -> TrapdoorBasepoint {
-        TrapdoorBasepoint {
-            b: pk.basepoint_eg * trapdoor,
-            t: *trapdoor,
+impl ChamaleonHashBasepoint {
+    pub(crate) fn new(pk: &GenericPublicKey, dlog: &Scalar) -> ChamaleonHashBasepoint {
+        ChamaleonHashBasepoint {
+            base: pk.basepoint_eg * dlog,
+            dlog: *dlog,
         }
     }
 }
@@ -122,13 +122,13 @@ impl GenericFlagCiphertexts {
 
     pub(crate) fn generate_flag<R: RngCore + CryptoRng>(
         pk: &GenericPublicKey,
-        basepoint_ch: &TrapdoorBasepoint,
+        basepoint_ch: &ChamaleonHashBasepoint,
         rng: &mut R,
     ) -> Self {
         let r = Scalar::random(rng);
         let z = Scalar::random(rng);
         let u = pk.basepoint_eg * r;
-        let w = basepoint_ch.b * z;
+        let w = basepoint_ch.base * z;
 
         let bit_ciphertexts: Vec<bool> = pk
             .keys
@@ -142,12 +142,12 @@ impl GenericFlagCiphertexts {
         let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
 
         let r_inv = r.invert();
-        let y = (z - m) * r_inv * basepoint_ch.t;
+        let y = (z - m) * r_inv * basepoint_ch.dlog;
 
         let c = GenericFlagCiphertexts::to_bytes(&bit_ciphertexts);
 
         Self {
-            basepoint_ch: basepoint_ch.b,
+            basepoint_ch: basepoint_ch.base,
             u,
             y,
             c,
@@ -257,14 +257,14 @@ mod tests {
 
     fn generate_keys_and_basepoint_ch(
         gamma: usize,
-    ) -> (SecretKey, GenericPublicKey, TrapdoorBasepoint) {
+    ) -> (SecretKey, GenericPublicKey, ChamaleonHashBasepoint) {
         let mut csprng = rand_core::OsRng;
 
         let sk = SecretKey::generate_keys(gamma, &mut csprng);
         let pk = sk.generate_public_key(&RISTRETTO_BASEPOINT_POINT);
-        let basepoint_ch = TrapdoorBasepoint {
-            b: RISTRETTO_BASEPOINT_POINT,
-            t: Scalar::ONE,
+        let basepoint_ch = ChamaleonHashBasepoint {
+            base: RISTRETTO_BASEPOINT_POINT,
+            dlog: Scalar::ONE,
         };
 
         (sk, pk, basepoint_ch)

@@ -10,7 +10,7 @@ use curve25519_dalek::{
 use rand_core::{CryptoRng, RngCore};
 
 use crate::{
-    fmd2_generic::{GenericFlagCiphertexts, GenericPublicKey, TrapdoorBasepoint},
+    fmd2_generic::{GenericFlagCiphertexts, GenericPublicKey, ChamaleonHashBasepoint},
     CcaSecure, DetectionKey, FmdKeyGen, FmdScheme, SecretKey,
 };
 
@@ -101,7 +101,7 @@ impl FmdScheme for Fmd2 {
 
         GenericFlagCiphertexts::generate_flag(
             &gpk,
-            &TrapdoorBasepoint::new(&gpk, &Scalar::ONE),
+            &ChamaleonHashBasepoint::new(&gpk, &Scalar::ONE),
             rng,
         )
         .into()

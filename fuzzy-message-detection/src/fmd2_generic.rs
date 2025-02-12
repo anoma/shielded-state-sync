@@ -43,12 +43,11 @@ impl SecretKey {
     }
 
     pub(crate) fn generate_public_key(&self, basepoint: &RistrettoPoint) -> GenericPublicKey {
-        let keys = self
-            .0
-            .iter()
-            .map(|k| k * basepoint)
-            .collect();
-        GenericPublicKey { basepoint_eg: *basepoint, keys }
+        let keys = self.0.iter().map(|k| k * basepoint).collect();
+        GenericPublicKey {
+            basepoint_eg: *basepoint,
+            keys,
+        }
     }
 }
 
@@ -212,8 +211,8 @@ fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar
 
 #[cfg(test)]
 mod tests {
-    use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
     use super::*;
+    use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 
     #[test]
     fn test_flag_detect() {
@@ -221,9 +220,9 @@ mod tests {
 
         let gamma = 5;
 
-        let (sk,pk,basepoint_ch) = generate_keys_and_basepoint_ch(gamma);
+        let (sk, pk, basepoint_ch) = generate_keys_and_basepoint_ch(gamma);
 
-        let flag_cipher = GenericFlagCiphertexts::generate_flag(&pk, &basepoint_ch,&mut csprng);
+        let flag_cipher = GenericFlagCiphertexts::generate_flag(&pk, &basepoint_ch, &mut csprng);
         let dk = sk.extract(&(0..gamma).collect::<Vec<_>>()).unwrap();
         assert!(dk.detect(&flag_cipher));
     }
@@ -233,7 +232,7 @@ mod tests {
     fn test_extract_checks() {
         let mut csprng = rand_core::OsRng;
 
-        let sk = SecretKey::generate_keys(5,&mut csprng);
+        let sk = SecretKey::generate_keys(5, &mut csprng);
 
         assert!(sk.extract(&[0, 0, 1]).is_none());
         assert!(sk.extract(&[0, 1, 2, 3, 4, 5, 6]).is_none());
@@ -246,22 +245,28 @@ mod tests {
 
         let gamma = 5;
 
-        let (sk,pk,basepoint_ch) = generate_keys_and_basepoint_ch(gamma);
+        let (sk, pk, basepoint_ch) = generate_keys_and_basepoint_ch(gamma);
 
         for _i in 0..10 {
-            let flag_cipher = GenericFlagCiphertexts::generate_flag(&pk,&basepoint_ch, &mut csprng);
+            let flag_cipher =
+                GenericFlagCiphertexts::generate_flag(&pk, &basepoint_ch, &mut csprng);
             let dk = sk.extract(&[0, 2, 4]).unwrap();
             assert!(dk.detect(&flag_cipher));
         }
     }
 
-    fn generate_keys_and_basepoint_ch(gamma: usize) -> (SecretKey,GenericPublicKey, TrapdoorBasepoint) {
+    fn generate_keys_and_basepoint_ch(
+        gamma: usize,
+    ) -> (SecretKey, GenericPublicKey, TrapdoorBasepoint) {
         let mut csprng = rand_core::OsRng;
 
         let sk = SecretKey::generate_keys(gamma, &mut csprng);
         let pk = sk.generate_public_key(&RISTRETTO_BASEPOINT_POINT);
-        let basepoint_ch = TrapdoorBasepoint { b: RISTRETTO_BASEPOINT_POINT, t: Scalar::ONE};
+        let basepoint_ch = TrapdoorBasepoint {
+            b: RISTRETTO_BASEPOINT_POINT,
+            t: Scalar::ONE,
+        };
 
-        (sk,pk,basepoint_ch)
+        (sk, pk, basepoint_ch)
     }
 }

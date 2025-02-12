@@ -23,9 +23,7 @@ pub struct PublicKey {
 
 impl From<GenericPublicKey> for PublicKey {
     fn from(value: GenericPublicKey) -> Self {
-        PublicKey {
-            keys: value.keys
-        } // Ignore basepoint.
+        PublicKey { keys: value.keys } // Ignore basepoint.
     }
 }
 

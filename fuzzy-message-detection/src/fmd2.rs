@@ -96,12 +96,7 @@ impl FmdScheme for Fmd2 {
             keys: pk.keys.clone(),
         };
 
-        GenericFlagCiphertexts::generate_flag(
-            &gpk,
-            &ChamaleonHashBasepoint::new(&gpk, &Scalar::ONE),
-            rng,
-        )
-        .into()
+        GenericFlagCiphertexts::generate_flag(&gpk, &ChamaleonHashBasepoint::default(), rng).into()
     }
 
     fn detect(dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {

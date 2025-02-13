@@ -2,7 +2,9 @@
 // It uses arbitrary basepoints for ElGamal encryption and the Chamaleon Hash.
 use std::collections::BTreeSet;
 
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+};
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256, Sha512};
 
@@ -92,6 +94,15 @@ impl ChamaleonHashBasepoint {
         ChamaleonHashBasepoint {
             base: pk.basepoint_eg * dlog,
             dlog: *dlog,
+        }
+    }
+}
+
+impl Default for ChamaleonHashBasepoint {
+    fn default() -> Self {
+        Self {
+            base: RISTRETTO_BASEPOINT_POINT,
+            dlog: Scalar::ONE,
         }
     }
 }

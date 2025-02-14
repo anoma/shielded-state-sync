@@ -1,13 +1,12 @@
 //! The FMD2 scheme with key derivation and diversification.
 //!
 //! Implements the scheme sketched [here](https://research.anoma.net/t/shorter-fmd-public-keys-is-it-possible/1074/4?u=kike).
-mod polynomial;
-
 use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, Scalar};
 use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 
+mod polynomial;
 use crate::{
-    fmd2_generic::{GenericFlagCiphertexts, GenericPublicKey, ChamaleonHashBasepoint},
+    fmd2_generic::{ChamaleonHashBasepoint, GenericFlagCiphertexts, GenericPublicKey},
     CcaSecure, Derive, Diversify, FmdKeyGen, FmdScheme, SecretKey,
 };
 

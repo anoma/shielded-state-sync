@@ -7,7 +7,7 @@ use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, Scalar};
 use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 
 use crate::{
-    fmd2_generic::{GenericFlagCiphertexts, GenericPublicKey, TrapdoorBasepoint},
+    fmd2_generic::{GenericFlagCiphertexts, GenericPublicKey, ChamaleonHashBasepoint},
     CcaSecure, Derive, Diversify, FmdKeyGen, FmdScheme, SecretKey,
 };
 
@@ -92,7 +92,7 @@ impl FmdScheme for Fmd2Poly {
 
         FmdPolyCiphertexts(GenericFlagCiphertexts::generate_flag(
             &gpk,
-            &TrapdoorBasepoint::new(&gpk, &trapdoor),
+            &ChamaleonHashBasepoint::new(&gpk, &trapdoor),
             rng,
         ))
     }

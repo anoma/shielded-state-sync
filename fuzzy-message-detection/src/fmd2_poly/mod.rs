@@ -96,10 +96,6 @@ impl FmdScheme for Fmd2Poly {
         ))
     }
 
-    fn extract(sk: &SecretKey, indices: &[usize]) -> Option<crate::DetectionKey> {
-        sk.extract(indices)
-    }
-
     fn detect(dsk: &crate::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
         dsk.detect(&flag_ciphers.0)
     }

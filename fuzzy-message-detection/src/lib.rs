@@ -4,6 +4,7 @@ use rand_core::{CryptoRng, RngCore};
 
 pub mod fmd2;
 pub(crate) mod fmd2_generic;
+pub mod fmd2_poly;
 pub use crate::fmd2_generic::{DetectionKey, SecretKey};
 /// A trait for a Fuzzy Message Detection (FMD) scheme with restricted false positive rates.
 ///
@@ -36,6 +37,48 @@ pub trait FmdKeyGen {
         &self,
         rng: &mut R,
     ) -> (Self::PublicKey, Self::SecretKey);
+}
+
+/// A trait to derive onto FMD keypairs.
+pub trait Derive: FmdKeyGen + FmdScheme {
+    fn derive(
+        &self,
+        parent_sk: &<Self as FmdKeyGen>::SecretKey,
+        parent_pk: &<Self as FmdKeyGen>::PublicKey,
+    ) -> (SecretKey, <Self as FmdScheme>::PublicKey);
+
+    fn derive_publicly(
+        &self,
+        parent_pk: &<Self as FmdKeyGen>::PublicKey,
+    ) -> <Self as FmdScheme>::PublicKey;
+}
+
+/// A trait to diversify keys.
+///
+/// A diversification must be correct and unlinkable in the following sense.
+///
+/// - Correctness with respect derivation: deriving from any two diversified
+/// public keys yields public keys associated to the same secret key.   
+// One way to achieve correctness is ensuring the following:
+//
+//   (sk1,pk1)----diversify----> pk2
+//      |                         |
+//      |                         |
+//    derive                derive_publicly
+//      |                         |
+//      |                         |
+//      \/                        \/
+//  (sk3,pk3)                    pk4 such that sk3 = secret_key(pk4)
+///
+/// - Unlinkability: it is not possible to tell whether any two public keys
+/// where diversified from the same input keypair.
+pub trait Diversify: FmdKeyGen {
+    /// Diversifies from the input secret key. The diversifed public key is bound
+    /// to the tag (different tags yield different diversified public keys).
+    fn diversify(
+        sk: &<Self as FmdKeyGen>::SecretKey,
+        diversifier_tag: &[u8],
+    ) -> <Self as FmdKeyGen>::PublicKey;
 }
 
 /// A marker trait used to indicate that

@@ -135,7 +135,7 @@ impl CcaSecure for Fmd2Poly {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{Derive, Diversify, FmdKeyGen};
+    use crate::{Derive, Diversify, FmdKeyGen, FmdScheme};
 
     use super::{polynomial::encode_coefficients, Fmd2Poly};
 
@@ -169,5 +169,38 @@ mod tests {
         let fmd_pk_from_master = encode_coefficients(&fmd_sk.0, &cpk_diversified.0.basepoint);
 
         assert_eq!(fmd_pk_from_diversified.0.results, fmd_pk_from_master);
+    }
+
+    #[test]
+    fn test_same_detection_key_for_diversified_fmd_public_keys() -> () {
+        let mut csprng = rand_core::OsRng;
+
+        let gamma = 10;
+
+        let fmdpoly = Fmd2Poly::new(gamma, 3);
+        let (master_cpk, master_csk) = fmdpoly.generate_keys(&mut csprng);
+
+        // Generate the FMD secret key and extract a detection key.
+        let (fmd_sk, _fmd_pk) = fmdpoly.derive(&master_csk, &master_cpk);
+        let dsk = <Fmd2Poly as FmdScheme>::extract(&fmd_sk, &[0, 2, 6, 8]).unwrap();
+
+        // Diversify twice and publicly derive their FMD public keys.
+        let cpk_diversified_1 =
+            <Fmd2Poly as Diversify>::diversify(&master_csk, b"some diversifier tag");
+        let cpk_diversified_2 =
+            <Fmd2Poly as Diversify>::diversify(&master_csk, b"another diversifier tag");
+        let fmd_pk_1 = fmdpoly.derive_publicly(&cpk_diversified_1);
+        let fmd_pk_2 = fmdpoly.derive_publicly(&cpk_diversified_2);
+
+        // Flags under distinct diversified FMD public keys yields same detection output.
+        for _i in 0..10 {
+            let flag_ciphers_1 = <Fmd2Poly as FmdScheme>::flag(&fmd_pk_1, &mut csprng);
+            let flag_ciphers_2 = <Fmd2Poly as FmdScheme>::flag(&fmd_pk_2, &mut csprng);
+
+            assert_eq!(
+                <Fmd2Poly as FmdScheme>::detect(&dsk, &flag_ciphers_1),
+                <Fmd2Poly as FmdScheme>::detect(&dsk, &flag_ciphers_2)
+            );
+        }
     }
 }

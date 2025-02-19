@@ -61,12 +61,8 @@ impl Fmd2 {
     }
 }
 
-impl FmdKeyGen<SecretKey,PublicKey> for Fmd2 {
-
-    fn generate_keys<R: RngCore + CryptoRng>(
-        &self,
-        rng: &mut R,
-    ) -> (SecretKey, PublicKey) {
+impl FmdKeyGen<SecretKey, PublicKey> for Fmd2 {
+    fn generate_keys<R: RngCore + CryptoRng>(&self, rng: &mut R) -> (SecretKey, PublicKey) {
         let gamma = self.gamma();
 
         // Secret key.
@@ -79,9 +75,12 @@ impl FmdKeyGen<SecretKey,PublicKey> for Fmd2 {
     }
 }
 
-impl FmdScheme<PublicKey,FlagCiphertexts> for Fmd2 {
-
-    fn flag<R: RngCore + CryptoRng>(&self,public_key: &PublicKey, rng: &mut R) -> FlagCiphertexts {
+impl FmdScheme<PublicKey, FlagCiphertexts> for Fmd2 {
+    fn flag<R: RngCore + CryptoRng>(
+        &mut self,
+        public_key: &PublicKey,
+        rng: &mut R,
+    ) -> FlagCiphertexts {
         let gpk = GenericPublicKey {
             basepoint_eg: RISTRETTO_BASEPOINT_POINT,
             keys: public_key.keys.clone(),
@@ -90,7 +89,7 @@ impl FmdScheme<PublicKey,FlagCiphertexts> for Fmd2 {
         GenericFlagCiphertexts::generate_flag(&gpk, &ChamaleonHashBasepoint::default(), rng).into()
     }
 
-    fn detect(&self,detection_key: &DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
+    fn detect(&self, detection_key: &DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
         let gfc = GenericFlagCiphertexts::new(
             &RISTRETTO_BASEPOINT_POINT,
             &flag_ciphers.u,

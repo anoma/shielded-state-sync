@@ -80,6 +80,7 @@ impl FmdScheme for Fmd2Poly {
     type FlagCiphertexts = FmdPolyCiphertexts;
 
     fn flag<R: rand_core::RngCore + rand_core::CryptoRng>(
+        &self,
         pk: &Self::PublicKey,
         rng: &mut R,
     ) -> Self::FlagCiphertexts {
@@ -96,7 +97,7 @@ impl FmdScheme for Fmd2Poly {
         ))
     }
 
-    fn detect(dsk: &crate::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
+    fn detect(&self, dsk: &crate::DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
         dsk.detect(&flag_ciphers.0)
     }
 }
@@ -124,7 +125,7 @@ impl Derive for Fmd2Poly {
 }
 
 impl Diversify for Fmd2Poly {
-    fn diversify(sk: &CompactSecretKey, diversifier_tag: &[u8]) -> CompactPublicKey {
+    fn diversify(&self,sk: &CompactSecretKey, diversifier_tag: &[u8]) -> CompactPublicKey {
         let encoded_polynomial = sk.0.encode_with_hashed_basepoint(diversifier_tag);
 
         CompactPublicKey(encoded_polynomial)
@@ -161,7 +162,7 @@ mod tests {
         let (master_cpk, master_csk) = fmdpoly.generate_keys(&mut csprng);
 
         // Diversify and derive.
-        let cpk_diversified = <Fmd2Poly as Diversify>::diversify(&master_csk, &[0; 32]);
+        let cpk_diversified = fmdpoly.diversify(&master_csk, &[0; 32]);
         let fmd_pk_from_diversified = fmdpoly.derive_publicly(&cpk_diversified);
 
         // Derive directly from master.
@@ -182,24 +183,24 @@ mod tests {
 
         // Generate the FMD secret key and extract a detection key.
         let (fmd_sk, _fmd_pk) = fmdpoly.derive(&master_csk, &master_cpk);
-        let dsk = <Fmd2Poly as FmdScheme>::extract(&fmd_sk, &[0, 2, 6, 8]).unwrap();
+        let dsk = fmdpoly.extract(&fmd_sk, &[0, 2, 6, 8]).unwrap();
 
         // Diversify twice and publicly derive their FMD public keys.
         let cpk_diversified_1 =
-            <Fmd2Poly as Diversify>::diversify(&master_csk, b"some diversifier tag");
+            fmdpoly.diversify(&master_csk, b"some diversifier tag");
         let cpk_diversified_2 =
-            <Fmd2Poly as Diversify>::diversify(&master_csk, b"another diversifier tag");
+            fmdpoly.diversify(&master_csk, b"another diversifier tag");
         let fmd_pk_1 = fmdpoly.derive_publicly(&cpk_diversified_1);
         let fmd_pk_2 = fmdpoly.derive_publicly(&cpk_diversified_2);
 
         // Flags under distinct diversified FMD public keys yields same detection output.
         for _i in 0..10 {
-            let flag_ciphers_1 = <Fmd2Poly as FmdScheme>::flag(&fmd_pk_1, &mut csprng);
-            let flag_ciphers_2 = <Fmd2Poly as FmdScheme>::flag(&fmd_pk_2, &mut csprng);
+            let flag_ciphers_1 = fmdpoly.flag(&fmd_pk_1, &mut csprng);
+            let flag_ciphers_2 = fmdpoly.flag(&fmd_pk_2, &mut csprng);
 
             assert_eq!(
-                <Fmd2Poly as FmdScheme>::detect(&dsk, &flag_ciphers_1),
-                <Fmd2Poly as FmdScheme>::detect(&dsk, &flag_ciphers_2)
+                fmdpoly.detect(&dsk, &flag_ciphers_1),
+                fmdpoly.detect(&dsk, &flag_ciphers_2)
             );
         }
     }

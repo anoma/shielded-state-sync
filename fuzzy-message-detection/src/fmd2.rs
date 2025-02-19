@@ -43,16 +43,16 @@ impl From<GenericFlagCiphertexts> for FlagCiphertexts {
     }
 }
 
-/// The γ > 0 parameter.
-/// The set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
-pub struct Fmd2Params {
+/// The implementation from Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
+pub struct Fmd2 {
     gamma: usize,
 }
 
-impl Fmd2Params {
+impl Fmd2 {
     /// Generate keys according to the minimum false positive rate γ.
-    pub fn new(gamma: usize) -> Fmd2Params {
-        Fmd2Params { gamma }
+    /// The set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
+    pub fn new(gamma: usize) -> Fmd2 {
+        Fmd2 { gamma }
     }
 
     /// Returns the γ parameter
@@ -61,7 +61,7 @@ impl Fmd2Params {
     }
 }
 
-impl FmdKeyGen for Fmd2Params {
+impl FmdKeyGen for Fmd2 {
     type PublicKey = PublicKey;
 
     type SecretKey = SecretKey;
@@ -82,15 +82,12 @@ impl FmdKeyGen for Fmd2Params {
     }
 }
 
-/// The implementation from Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
-pub struct Fmd2;
-
 impl FmdScheme for Fmd2 {
     type PublicKey = PublicKey;
 
     type FlagCiphertexts = FlagCiphertexts;
 
-    fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts {
+    fn flag<R: RngCore + CryptoRng>(&self,pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts {
         let gpk = GenericPublicKey {
             basepoint_eg: RISTRETTO_BASEPOINT_POINT,
             keys: pk.keys.clone(),
@@ -99,7 +96,7 @@ impl FmdScheme for Fmd2 {
         GenericFlagCiphertexts::generate_flag(&gpk, &ChamaleonHashBasepoint::default(), rng).into()
     }
 
-    fn detect(dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
+    fn detect(&self,dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
         let gfc = GenericFlagCiphertexts::new(
             &RISTRETTO_BASEPOINT_POINT,
             &flag_ciphers.u,
@@ -112,4 +109,4 @@ impl FmdScheme for Fmd2 {
 }
 
 /// FMD2 is proven to be IND-CCA secure in the [FMD paper](https://eprint.iacr.org/2021/089).
-impl CcaSecure for Fmd2Params {}
+impl CcaSecure for Fmd2 {}

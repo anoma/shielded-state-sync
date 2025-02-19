@@ -13,17 +13,17 @@ pub trait FmdScheme {
     type PublicKey;
     type FlagCiphertexts;
 
-    fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts;
+    fn flag<R: RngCore + CryptoRng>(&self,pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts;
 
     /// The number of (secret key) indices gives the chosen false positive rate.
     /// Should return `None` if the number of indices is larger than the
     /// γ parameter of the FMD scheme.
-    fn extract(sk: &SecretKey, indices: &[usize]) -> Option<DetectionKey> {
+    fn extract(&self,sk: &SecretKey, indices: &[usize]) -> Option<DetectionKey> {
         sk.extract(indices)
     }
 
     /// Probabilistic detection based on the number of secret keys embedded in the detection key.
-    fn detect(dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool;
+    fn detect(&self,dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool;
 }
 
 /// A trait to generate the keypair of the FMD scheme.
@@ -76,6 +76,7 @@ pub trait Diversify: FmdKeyGen {
     /// Diversifies from the input secret key. The diversifed public key is bound
     /// to the tag (different tags yield different diversified public keys).
     fn diversify(
+        &self,
         sk: &<Self as FmdKeyGen>::SecretKey,
         diversifier_tag: &[u8],
     ) -> <Self as FmdKeyGen>::PublicKey;

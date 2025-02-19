@@ -8,7 +8,7 @@ use fuzzy_message_detection::{
 fn benchmark_flag(c: &mut Criterion) {
     let mut csprng = rand_core::OsRng;
     let fmd2 = Fmd2::new(22);
-    let (pk, _sk) = fmd2.generate_keys(&mut csprng);
+    let (_sk, pk) = fmd2.generate_keys(&mut csprng);
     c.bench_function("flag", |b| {
         b.iter(|| fmd2.flag(&pk, &mut csprng))
     });
@@ -18,7 +18,7 @@ fn benchmark_detect(c: &mut Criterion) {
     let mut csprng = rand_core::OsRng;
 
     let fmd2 = Fmd2::new(22);
-    let (pk, sk) = fmd2.generate_keys(&mut csprng);
+    let (sk, pk) = fmd2.generate_keys(&mut csprng);
     let flag_cipher = fmd2.flag(&pk, &mut csprng);
     let dk = fmd2.extract(&sk, &[0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
     c.bench_function("detect", |b| {

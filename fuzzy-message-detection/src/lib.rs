@@ -11,7 +11,7 @@ pub use crate::fmd2_generic::{DetectionKey, SecretKey};
 /// We slightly modify the signature of [extract](FmdScheme::extract): detection keys are any ordered subset of the γ secret keys, along with their indices. This means that an implementation of [detect](FmdScheme::detect) should decrypt the flag ciphertexts in the positions given by those indices.
 pub trait FmdScheme<PK,F> {
 
-    fn flag<R: RngCore + CryptoRng>(&self,public_key: &PK, rng: &mut R) -> F;
+    fn flag<R: RngCore + CryptoRng>(&mut self,public_key: &PK, rng: &mut R) -> F;
 
     /// The number of (secret key) indices gives the chosen false positive rate.
     /// Should return `None` if the number of indices is larger than the

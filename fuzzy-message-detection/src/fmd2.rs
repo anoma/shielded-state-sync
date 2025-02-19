@@ -81,7 +81,7 @@ impl FmdKeyGen<SecretKey,PublicKey> for Fmd2 {
 
 impl FmdScheme<PublicKey,FlagCiphertexts> for Fmd2 {
 
-    fn flag<R: RngCore + CryptoRng>(&self,public_key: &PublicKey, rng: &mut R) -> FlagCiphertexts {
+    fn flag<R: RngCore + CryptoRng>(&mut self,public_key: &PublicKey, rng: &mut R) -> FlagCiphertexts {
         let gpk = GenericPublicKey {
             basepoint_eg: RISTRETTO_BASEPOINT_POINT,
             keys: public_key.keys.clone(),

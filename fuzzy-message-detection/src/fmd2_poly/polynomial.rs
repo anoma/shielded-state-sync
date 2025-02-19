@@ -23,7 +23,7 @@ pub(crate) struct ScalarEvaluations {
 
 // γ point evaluations of the polynomial p(X) at public scalars.
 // result[i] = p(public_scalar[i]) * basepoint
-#[derive(PartialEq, Debug,Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) struct PointEvaluations {
     pub(crate) basepoint: RistrettoPoint,
     pub(crate) results: Vec<RistrettoPoint>,

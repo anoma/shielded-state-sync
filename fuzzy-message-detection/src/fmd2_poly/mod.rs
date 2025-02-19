@@ -20,7 +20,7 @@ pub struct CompactPublicKey(EncodedPolynomial);
 
 /// The evaluations of the secret polynomial
 /// encoded using an arbitrary basepoint.
-#[derive(PartialEq, Debug,Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct FmdPolyPublicKey(PointEvaluations);
 
 /// The basepoint for the chamaleon hash,
@@ -55,8 +55,7 @@ impl Fmd2Poly {
     }
 }
 
-impl FmdKeyGen<CompactSecretKey,CompactPublicKey> for Fmd2Poly {
-
+impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for Fmd2Poly {
     // Public keys generated have basepoint hardcoded to Ristretto basepoint.
     // Thus, the master or original public key (as opposed to diversified keys)
     fn generate_keys<R: rand_core::RngCore + rand_core::CryptoRng>(
@@ -75,14 +74,14 @@ impl FmdKeyGen<CompactSecretKey,CompactPublicKey> for Fmd2Poly {
     }
 }
 
-impl FmdScheme<CompactPublicKey,FmdPolyCiphertexts> for Fmd2Poly {
-
+impl FmdScheme<CompactPublicKey, FmdPolyCiphertexts> for Fmd2Poly {
     fn flag<R: rand_core::RngCore + rand_core::CryptoRng>(
         &mut self,
         public_key: &CompactPublicKey,
         rng: &mut R,
     ) -> FmdPolyCiphertexts {
-        if self.derived_pk.is_none() { // Just derive on first call.
+        if self.derived_pk.is_none() {
+            // Just derive on first call.
             let derived_pk = self.derive_publicly(public_key);
             self.derived_pk = Some(derived_pk);
         }
@@ -100,12 +99,16 @@ impl FmdScheme<CompactPublicKey,FmdPolyCiphertexts> for Fmd2Poly {
         ))
     }
 
-    fn detect(&self, detection_key: &crate::DetectionKey, flag_ciphers: &FmdPolyCiphertexts) -> bool {
+    fn detect(
+        &self,
+        detection_key: &crate::DetectionKey,
+        flag_ciphers: &FmdPolyCiphertexts,
+    ) -> bool {
         detection_key.detect(&flag_ciphers.0)
     }
 }
 
-impl Derive<CompactSecretKey,CompactPublicKey,FmdPolyPublicKey> for Fmd2Poly {
+impl Derive<CompactSecretKey, CompactPublicKey, FmdPolyPublicKey> for Fmd2Poly {
     fn derive(
         &self,
         parent_sk: &CompactSecretKey,
@@ -127,8 +130,8 @@ impl Derive<CompactSecretKey,CompactPublicKey,FmdPolyPublicKey> for Fmd2Poly {
     }
 }
 
-impl Diversify<CompactSecretKey,CompactPublicKey> for Fmd2Poly {
-    fn diversify(&self,sk: &CompactSecretKey, diversifier_tag: &[u8]) -> CompactPublicKey {
+impl Diversify<CompactSecretKey, CompactPublicKey> for Fmd2Poly {
+    fn diversify(&self, sk: &CompactSecretKey, diversifier_tag: &[u8]) -> CompactPublicKey {
         let encoded_polynomial = sk.0.encode_with_hashed_basepoint(diversifier_tag);
 
         CompactPublicKey(encoded_polynomial)
@@ -189,10 +192,8 @@ mod tests {
         let dsk = fmdpoly.extract(&fmd_sk, &[0, 2, 6, 8]).unwrap();
 
         // Diversify twice and publicly derive their FMD public keys.
-        let cpk_diversified_1 =
-            fmdpoly.diversify(&master_csk, b"some diversifier tag");
-        let cpk_diversified_2 =
-            fmdpoly.diversify(&master_csk, b"another diversifier tag");
+        let cpk_diversified_1 = fmdpoly.diversify(&master_csk, b"some diversifier tag");
+        let cpk_diversified_2 = fmdpoly.diversify(&master_csk, b"another diversifier tag");
 
         // Flags under distinct diversified public keys yield same detection output.
         for _i in 0..10 {

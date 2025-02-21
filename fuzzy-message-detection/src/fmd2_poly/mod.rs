@@ -191,7 +191,7 @@ mod tests {
         let (fmd_sk, _fmd_pk) = fmdpoly.derive(&master_csk, &master_cpk);
         let dsk = fmdpoly.extract(&fmd_sk, &[0, 2, 6, 8]).unwrap();
 
-        // Diversify twice and publicly derive their FMD public keys.
+        // Diversify twice.
         let cpk_diversified_1 = fmdpoly.diversify(&master_csk, b"some diversifier tag");
         let cpk_diversified_2 = fmdpoly.diversify(&master_csk, b"another diversifier tag");
 

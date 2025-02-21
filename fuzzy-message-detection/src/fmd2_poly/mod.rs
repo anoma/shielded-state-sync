@@ -33,7 +33,7 @@ pub struct Fmd2Poly {
     threshold: usize,
     //the γ public scalars to derive keys from.
     pub(crate) public_scalars: Vec<Scalar>,
-    // The derived public key. Generated on first call to flag.
+    // The derived public key.
     derived_pk: Option<FmdPolyPublicKey>,
 }
 

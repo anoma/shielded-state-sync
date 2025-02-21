@@ -1,6 +1,7 @@
 // An internal generic implementation of the FMD2 flag and detect algorithms.
 // It uses arbitrary basepoints for ElGamal encryption and the Chamaleon Hash.
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
+use alloc::vec::Vec;
 
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,

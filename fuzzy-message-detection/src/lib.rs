@@ -1,3 +1,5 @@
+#![cfg_attr(not(test), no_std)]
+
 extern crate alloc;
 
 use rand_core::{CryptoRng, RngCore};

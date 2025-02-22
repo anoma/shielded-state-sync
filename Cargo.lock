@@ -182,7 +182,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "curve25519-dalek-derive",
- "digest",
  "fiat-crypto",
  "rand_core",
  "rustc_version",

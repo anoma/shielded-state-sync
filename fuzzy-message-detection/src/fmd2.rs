@@ -1,4 +1,7 @@
 //! The FMD2 scheme.
+
+use alloc::vec::Vec;
+
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };

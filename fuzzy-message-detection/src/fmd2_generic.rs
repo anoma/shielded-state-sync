@@ -1,6 +1,7 @@
 // An internal generic implementation of the FMD2 flag and detect algorithms.
 // It uses arbitrary basepoints for ElGamal encryption and the Chamaleon Hash.
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
+use alloc::vec::Vec;
 
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
@@ -215,8 +216,9 @@ fn hash_to_flag_ciphertext_bit(
 fn hash_flag_ciphertexts(u: &RistrettoPoint, bit_ciphertexts: &[bool]) -> Scalar {
     let mut m_bytes = u.compress().to_bytes().to_vec();
     m_bytes.extend_from_slice(&GenericFlagCiphertexts::to_bytes(bit_ciphertexts));
-
-    Scalar::hash_from_bytes::<Sha512>(&m_bytes)
+    let mut hasher = Sha512::default();
+    Digest::update(&mut hasher, &m_bytes);
+    Scalar::from_bytes_mod_order_wide(&hasher.finalize().into())
 }
 
 #[cfg(test)]

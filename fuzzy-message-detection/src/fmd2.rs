@@ -46,16 +46,16 @@ impl From<GenericFlagCiphertexts> for FlagCiphertexts {
     }
 }
 
-/// The γ > 0 parameter.
-/// The set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
-pub struct Fmd2Params {
+/// The implementation from Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
+pub struct Fmd2 {
     gamma: usize,
 }
 
-impl Fmd2Params {
+impl Fmd2 {
     /// Generate keys according to the minimum false positive rate γ.
-    pub fn new(gamma: usize) -> Fmd2Params {
-        Fmd2Params { gamma }
+    /// The set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
+    pub fn new(gamma: usize) -> Fmd2 {
+        Fmd2 { gamma }
     }
 
     /// Returns the γ parameter
@@ -64,15 +64,8 @@ impl Fmd2Params {
     }
 }
 
-impl FmdKeyGen for Fmd2Params {
-    type PublicKey = PublicKey;
-
-    type SecretKey = SecretKey;
-
-    fn generate_keys<R: RngCore + CryptoRng>(
-        &self,
-        rng: &mut R,
-    ) -> (Self::PublicKey, Self::SecretKey) {
+impl FmdKeyGen<SecretKey, PublicKey> for Fmd2 {
+    fn generate_keys<R: RngCore + CryptoRng>(&self, rng: &mut R) -> (SecretKey, PublicKey) {
         let gamma = self.gamma();
 
         // Secret key.
@@ -81,28 +74,25 @@ impl FmdKeyGen for Fmd2Params {
         // Public key.
         let pk = sk.generate_public_key(&RISTRETTO_BASEPOINT_POINT);
 
-        (pk.into(), sk)
+        (sk, pk.into())
     }
 }
 
-/// The implementation from Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
-pub struct Fmd2;
-
-impl FmdScheme for Fmd2 {
-    type PublicKey = PublicKey;
-
-    type FlagCiphertexts = FlagCiphertexts;
-
-    fn flag<R: RngCore + CryptoRng>(pk: &Self::PublicKey, rng: &mut R) -> Self::FlagCiphertexts {
+impl FmdScheme<PublicKey, FlagCiphertexts> for Fmd2 {
+    fn flag<R: RngCore + CryptoRng>(
+        &mut self,
+        public_key: &PublicKey,
+        rng: &mut R,
+    ) -> FlagCiphertexts {
         let gpk = GenericPublicKey {
             basepoint_eg: RISTRETTO_BASEPOINT_POINT,
-            keys: pk.keys.clone(),
+            keys: public_key.keys.clone(),
         };
 
         GenericFlagCiphertexts::generate_flag(&gpk, &ChamaleonHashBasepoint::default(), rng).into()
     }
 
-    fn detect(dsk: &DetectionKey, flag_ciphers: &Self::FlagCiphertexts) -> bool {
+    fn detect(&self, detection_key: &DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
         let gfc = GenericFlagCiphertexts::new(
             &RISTRETTO_BASEPOINT_POINT,
             &flag_ciphers.u,
@@ -110,9 +100,9 @@ impl FmdScheme for Fmd2 {
             &flag_ciphers.c,
         );
 
-        dsk.detect(&gfc)
+        detection_key.detect(&gfc)
     }
 }
 
 /// FMD2 is proven to be IND-CCA secure in the [FMD paper](https://eprint.iacr.org/2021/089).
-impl CcaSecure for Fmd2Params {}
+impl CcaSecure for Fmd2 {}

@@ -1,6 +1,8 @@
 //! The FMD2 scheme with key derivation and diversification.
 //!
 //! Implements the scheme sketched [here](https://research.anoma.net/t/shorter-fmd-public-keys-is-it-possible/1074/4?u=kike).
+use alloc::vec::Vec;
+
 use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, Scalar};
 use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 
@@ -131,7 +133,7 @@ impl Derive<CompactSecretKey, CompactPublicKey, FmdPolyPublicKey> for Fmd2Poly {
 }
 
 impl Diversify<CompactSecretKey, CompactPublicKey> for Fmd2Poly {
-    fn diversify(&self, sk: &CompactSecretKey, diversifier_tag: &[u8]) -> CompactPublicKey {
+    fn diversify(&self, sk: &CompactSecretKey, diversifier_tag: &[u8; 64]) -> CompactPublicKey {
         let encoded_polynomial = sk.0.encode_with_hashed_basepoint(diversifier_tag);
 
         CompactPublicKey(encoded_polynomial)
@@ -142,9 +144,10 @@ impl CcaSecure for Fmd2Poly {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{Derive, Diversify, FmdKeyGen, FmdScheme};
+    use sha2::{Digest, Sha512};
 
     use super::{polynomial::encode_coefficients, Fmd2Poly};
+    use crate::{Derive, Diversify, FmdKeyGen, FmdScheme};
 
     #[test]
     fn test_derive_is_correct() -> () {
@@ -168,7 +171,7 @@ mod tests {
         let (master_csk, master_cpk) = fmdpoly.generate_keys(&mut csprng);
 
         // Diversify and derive.
-        let cpk_diversified = fmdpoly.diversify(&master_csk, &[0; 32]);
+        let cpk_diversified = fmdpoly.diversify(&master_csk, &[0; 64]);
         let fmd_pk_from_diversified = fmdpoly.derive_publicly(&cpk_diversified);
 
         // Derive directly from master.
@@ -192,8 +195,12 @@ mod tests {
         let dsk = fmdpoly.extract(&fmd_sk, &[0, 2, 6, 8]).unwrap();
 
         // Diversify twice.
-        let cpk_diversified_1 = fmdpoly.diversify(&master_csk, b"some diversifier tag");
-        let cpk_diversified_2 = fmdpoly.diversify(&master_csk, b"another diversifier tag");
+
+        let tag1 = hash_into_64_bytes(b"some diversifier tag");
+        let tag2 = hash_into_64_bytes(b"another diversifier tag");
+
+        let cpk_diversified_1 = fmdpoly.diversify(&master_csk, &tag1);
+        let cpk_diversified_2 = fmdpoly.diversify(&master_csk, &tag2);
 
         // Flags under distinct diversified public keys yield same detection output.
         for _i in 0..10 {
@@ -205,5 +212,12 @@ mod tests {
                 fmdpoly.detect(&dsk, &flag_ciphers_2)
             );
         }
+    }
+
+    fn hash_into_64_bytes(bytes: &[u8]) -> [u8; 64] {
+        let mut hasher = Sha512::new();
+        hasher.update(bytes);
+
+        hasher.finalize().try_into().unwrap()
     }
 }

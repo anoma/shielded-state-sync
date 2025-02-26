@@ -61,7 +61,8 @@ pub trait Derive<SK, PK, DPK>: FmdKeyGen<SK, PK> {
 pub trait Diversify<SK, PK>: FmdKeyGen<SK, PK> {
     /// Diversifies from the input secret key. The diversifed public key is bound
     /// to the tag (different tags yield different diversified public keys).
-    fn diversify(&self, sk: &SK, diversifier_tag: &[u8]) -> PK;
+    /// The input bytes should be uniform (e.g. a hash digest)
+    fn diversify(&self, sk: &SK, diversifier_tag: &[u8; 64]) -> PK;
 }
 
 /// A marker trait used to indicate that

@@ -1,7 +1,6 @@
-use std::ops::{Add, Mul};
+use alloc::vec::Vec;
 
 use curve25519_dalek::{RistrettoPoint, Scalar};
-use sha2::Sha512;
 
 // A degree `t` polynomial p(X) in Z_q[X] given by its t+1 coefficients.
 pub(crate) struct Polynomial {
@@ -49,24 +48,56 @@ impl Polynomial {
     }
 
     // Basepoint determined by input bytes.
-    pub(crate) fn encode_with_hashed_basepoint(&self, public_bytes: &[u8]) -> EncodedPolynomial {
-        let basepoint = RistrettoPoint::hash_from_bytes::<Sha512>(public_bytes);
+    // The input bytes should be uniform to ensure the dlog generated point is unknown.
+    pub(crate) fn encode_with_hashed_basepoint(
+        &self,
+        public_bytes: &[u8; 64],
+    ) -> EncodedPolynomial {
+        let basepoint = RistrettoPoint::from_uniform_bytes(public_bytes);
 
         self.encode(&basepoint)
     }
 
     pub(crate) fn evaluate(&self, public_scalars: &[Scalar]) -> ScalarEvaluations {
+        let evaluations = public_scalars
+            .iter()
+            .map(|scalar| {
+                let mut res = self.coeffs[0];
+                let mut pow = Scalar::ONE;
+                for coeff in self.coeffs.iter().skip(1) {
+                    pow *= scalar;
+                    res += coeff * pow;
+                }
+
+                res
+            })
+            .collect();
+
         ScalarEvaluations {
-            results: evaluate_inner(public_scalars, &self.coeffs),
+            results: evaluations,
         }
     }
 }
 
 impl EncodedPolynomial {
     pub(crate) fn evaluate(&self, public_scalars: &[Scalar]) -> PointEvaluations {
+        let evaluations = public_scalars
+            .iter()
+            .map(|scalar| {
+                let mut res = self.coeffs[0];
+                let mut pow = Scalar::ONE;
+                for coeff in self.coeffs.iter().skip(1) {
+                    pow *= scalar;
+                    res += coeff * pow;
+                }
+
+                res
+            })
+            .collect();
+
         PointEvaluations {
             basepoint: self.basepoint,
-            results: evaluate_inner(public_scalars, &self.coeffs),
+            results: evaluations,
         }
     }
 }
@@ -89,25 +120,4 @@ pub(crate) fn encode_coefficients(
     let coeffs_encoded: Vec<RistrettoPoint> = coeffs.iter().map(|c| *basepoint * c).collect();
 
     coeffs_encoded
-}
-
-fn evaluate_inner<E>(public_scalars: &[Scalar], coeffs: &[E]) -> Vec<E>
-where
-    E: Add<E, Output = E> + Mul<Scalar, Output = E> + Clone,
-{
-    let evaluations: Vec<E> = public_scalars
-        .iter()
-        .map(|scalar| {
-            let mut res = coeffs[0].clone();
-            let mut pow = Scalar::ONE;
-            for coeff in coeffs.iter().skip(1) {
-                pow *= scalar;
-                res = res + coeff.clone() * pow;
-            }
-
-            res
-        })
-        .collect();
-
-    evaluations
 }

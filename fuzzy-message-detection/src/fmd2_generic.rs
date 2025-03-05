@@ -62,10 +62,11 @@ impl SecretKey {
 
         let mut detection_keys = Vec::with_capacity(num_detection_keys);
         for j in 0..num_detection_keys {
-            let mut n_j = leaked_rate / threshold;
-            if j == num_detection_keys - 1 {
-                n_j = leaked_rate - (threshold - 1) * leaked_rate / threshold
-            }
+            let n_j = if j == num_detection_keys - 1 {
+                leaked_rate - (threshold - 1) * leaked_rate / threshold
+            } else {
+                leaked_rate / threshold
+            };
             let indices: Vec<usize> = (j..(j + n_j)).collect();
             let dsk = self.extract(&indices)?;
             detection_keys.push(dsk);

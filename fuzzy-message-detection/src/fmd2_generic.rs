@@ -44,6 +44,36 @@ impl SecretKey {
         })
     }
 
+    pub(crate) fn multi_extract(
+        &self,
+        num_detection_keys: usize,
+        threshold: usize,
+        leaked_rate: usize,
+        filtering_rate: usize,
+    ) -> Option<Vec<DetectionKey>> {
+        // Check valid rates
+        if threshold > num_detection_keys
+        || num_detection_keys > self.0.len() // #{detection keys} > γ parameter
+        || threshold > leaked_rate
+        || filtering_rate != leaked_rate + (num_detection_keys-threshold) * leaked_rate / threshold
+        {
+            return None;
+        }
+
+        let mut detection_keys = Vec::with_capacity(num_detection_keys);
+        for j in 0..num_detection_keys {
+            let mut n_j = leaked_rate / threshold;
+            if j == num_detection_keys - 1 {
+                n_j = leaked_rate - (threshold - 1) * leaked_rate / threshold
+            }
+            let indices: Vec<usize> = (j..(j + n_j)).collect();
+            let dsk = self.extract(&indices)?;
+            detection_keys.push(dsk);
+        }
+
+        Some(detection_keys)
+    }
+
     pub(crate) fn generate_public_key(&self, basepoint: &RistrettoPoint) -> GenericPublicKey {
         let keys = self.0.iter().map(|k| k * basepoint).collect();
         GenericPublicKey {
@@ -249,6 +279,55 @@ mod tests {
         assert!(sk.extract(&[0, 0, 1]).is_none());
         assert!(sk.extract(&[0, 1, 2, 3, 4, 5, 6]).is_none());
         assert!(sk.extract(&[6]).is_none());
+    }
+
+    #[test]
+    fn test_multi_extract_works() -> () {
+        let mut csprng = rand_core::OsRng;
+
+        let gamma = 4;
+        let sk = SecretKey::generate_keys(gamma, &mut csprng);
+
+        let detection_keys = sk.multi_extract(3, 2, 3, 4).unwrap();
+        // check correct split size: n_1 = n_2 = 1, n_3 = 2
+        assert_eq!(detection_keys[0].keys.len(), 1);
+        assert_eq!(detection_keys[1].keys.len(), 1);
+        assert_eq!(detection_keys[2].keys.len(), 2);
+        // check disjoint split
+        assert!(detection_keys[0].keys[0] != detection_keys[1].keys[0]);
+        assert_eq!(
+            false,
+            detection_keys[2].keys.contains(&detection_keys[0].keys[0])
+        );
+        assert_eq!(
+            false,
+            detection_keys[2].keys.contains(&detection_keys[1].keys[0])
+        );
+
+        // check invalid rates are rejected
+        assert_eq!(
+            // threshold > #keys
+            true,
+            sk.multi_extract(1, 2, 2, 2 + 1 - 2).is_none()
+        );
+        assert_eq!(
+            // #keys > gamma
+            true,
+            sk.multi_extract(gamma + 1, 2, 2, 2 + (gamma + 1) - 2)
+                .is_none()
+        );
+        assert_eq!(
+            // threshold > leaked rate
+            true,
+            sk.multi_extract(4, 3, 2, 2 + 4 - 3).is_none()
+        );
+        assert_eq!(
+            // bad filtering rate
+            true,
+            sk.multi_extract(4, 3, 3, (3 + 4 - 3) + 1).is_none()
+        );
+
+        ()
     }
 
     #[test]

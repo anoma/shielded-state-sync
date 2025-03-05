@@ -192,7 +192,11 @@ mod tests {
 
         // Generate the FMD secret key and extract a detection key.
         let (fmd_sk, _fmd_pk) = fmdpoly.derive(&master_csk, &master_cpk);
-        let dsk = fmdpoly.extract(&fmd_sk, &[0, 2, 6, 8]).unwrap();
+        let dsk = fmdpoly
+            .multi_extract(&fmd_sk, 1, 1, 4, 4)
+            .unwrap()
+            .pop()
+            .unwrap();
 
         // Diversify twice.
 

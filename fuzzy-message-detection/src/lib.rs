@@ -2,23 +2,30 @@
 
 extern crate alloc;
 
+use alloc::vec::Vec;
 use rand_core::{CryptoRng, RngCore};
 
 pub mod fmd2;
 pub(crate) mod fmd2_generic;
 pub mod fmd2_poly;
 pub use crate::fmd2_generic::{DetectionKey, SecretKey};
-/// A trait for a Fuzzy Message Detection (FMD) scheme with restricted false positive rates.
+/// A trait for a Fuzzy Message Detection (FMD) scheme with multi-extraction.
 ///
 /// We slightly modify the signature of [extract](FmdScheme::extract): detection keys are any ordered subset of the γ secret keys, along with their indices. This means that an implementation of [detect](FmdScheme::detect) should decrypt the flag ciphertexts in the positions given by those indices.
 pub trait FmdScheme<PK, F> {
     fn flag<R: RngCore + CryptoRng>(&mut self, public_key: &PK, rng: &mut R) -> F;
 
-    /// The number of (secret key) indices gives the chosen false positive rate.
-    /// Should return `None` if the number of indices is larger than the
-    /// γ parameter of the FMD scheme.
-    fn extract(&self, secret_key: &SecretKey, indices: &[usize]) -> Option<DetectionKey> {
-        secret_key.extract(indices)
+    /// Returns `None` if (`leaked_rate`,`filtering_rate`) does not constitute a
+    /// valid pair of rates for the given `num_detection_keys` and `threshold`.
+    fn multi_extract(
+        &self,
+        secret_key: &SecretKey,
+        num_detection_keys: usize,
+        threshold: usize,
+        leaked_rate: usize,
+        filtering_rate: usize,
+    ) -> Option<Vec<DetectionKey>> {
+        secret_key.multi_extract(num_detection_keys, threshold, leaked_rate, filtering_rate)
     }
 
     /// Probabilistic detection based on the number of secret keys embedded in the detection key.

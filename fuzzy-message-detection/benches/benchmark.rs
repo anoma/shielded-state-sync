@@ -15,7 +15,7 @@ fn benchmark_detect(c: &mut Criterion) {
     let mut fmd2 = Fmd2::new(22);
     let (sk, pk) = fmd2.generate_keys(&mut csprng);
     let flag_cipher = fmd2.flag(&pk, &mut csprng);
-    let dk = fmd2.extract(&sk, &[0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
+    let dk = fmd2.multi_extract(&sk, 1, 1, 11, 11).unwrap().pop();
     c.bench_function("detect", |b| {
         b.iter(|| fmd2.detect(dk.as_ref().unwrap(), &flag_cipher))
     });

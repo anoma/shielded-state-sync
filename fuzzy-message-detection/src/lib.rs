@@ -5,9 +5,11 @@ extern crate alloc;
 use alloc::vec::Vec;
 use rand_core::{CryptoRng, RngCore};
 
+pub(crate) mod combiner;
 pub mod fmd2;
 pub(crate) mod fmd2_generic;
 pub mod fmd2_poly;
+pub use crate::combiner::FilterCombiner;
 pub use crate::fmd2_generic::{DetectionKey, SecretKey};
 /// A trait for a Fuzzy Message Detection (FMD) scheme with multi-extraction.
 ///

@@ -1,4 +1,4 @@
-//! The FMD2 scheme.
+//! A multi-key FMD scheme based in FMD2.
 
 use alloc::vec::Vec;
 
@@ -10,20 +10,22 @@ use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    fmd2_generic::{ChamaleonHashBasepoint, GenericFlagCiphertexts, GenericPublicKey},
-    CcaSecure, DetectionKey, FmdKeyGen, FmdScheme, SecretKey,
+    fmd2_generic::{ChamaleonHashBasepoint, GenericFlagCiphertexts, GenericFmdPublicKey},
+    DetectionKey, FmdKeyGen, FmdSecretKey, MultiFmdScheme,
 };
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// γ points. The basepoint is hardcoded to the Ristretto basepoint.
-pub struct PublicKey {
-    keys: Vec<RistrettoPoint>,
+/// γ public subkeys (points). The basepoint is hardcoded to the Ristretto basepoint.
+pub struct FmdPublicKey {
+    subkeys: Vec<RistrettoPoint>,
 }
 
-impl From<GenericPublicKey> for PublicKey {
-    fn from(value: GenericPublicKey) -> Self {
-        PublicKey { keys: value.keys } // Ignore basepoint.
+impl From<GenericFmdPublicKey> for FmdPublicKey {
+    fn from(value: GenericFmdPublicKey) -> Self {
+        FmdPublicKey {
+            subkeys: value.keys,
+        } // Ignore basepoint.
     }
 }
 
@@ -46,16 +48,15 @@ impl From<GenericFlagCiphertexts> for FlagCiphertexts {
     }
 }
 
-/// The implementation from Figure 3 of the [FMD paper](https://eprint.iacr.org/2021/089).
-pub struct Fmd2 {
+/// The multi-key scheme.
+pub struct Fmd2MultikeyScheme {
     gamma: usize,
 }
 
-impl Fmd2 {
-    /// Generate keys according to the minimum false positive rate γ.
+impl Fmd2MultikeyScheme {
     /// The set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
-    pub fn new(gamma: usize) -> Fmd2 {
-        Fmd2 { gamma }
+    pub fn new(gamma: usize) -> Fmd2MultikeyScheme {
+        Fmd2MultikeyScheme { gamma }
     }
 
     /// Returns the γ parameter
@@ -64,12 +65,13 @@ impl Fmd2 {
     }
 }
 
-impl FmdKeyGen<SecretKey, PublicKey> for Fmd2 {
-    fn generate_keys<R: RngCore + CryptoRng>(&self, rng: &mut R) -> (SecretKey, PublicKey) {
+impl FmdKeyGen<FmdSecretKey, FmdPublicKey> for Fmd2MultikeyScheme {
+    /// Generates as many subkeys as the γ parameter of `self`.
+    fn generate_keys<R: RngCore + CryptoRng>(&self, rng: &mut R) -> (FmdSecretKey, FmdPublicKey) {
         let gamma = self.gamma();
 
         // Secret key.
-        let sk = SecretKey::generate_keys(gamma, rng);
+        let sk = FmdSecretKey::generate_keys(gamma, rng);
 
         // Public key.
         let pk = sk.generate_public_key(&RISTRETTO_BASEPOINT_POINT);
@@ -78,15 +80,15 @@ impl FmdKeyGen<SecretKey, PublicKey> for Fmd2 {
     }
 }
 
-impl FmdScheme<PublicKey, FlagCiphertexts> for Fmd2 {
+impl MultiFmdScheme<FmdPublicKey, FlagCiphertexts> for Fmd2MultikeyScheme {
     fn flag<R: RngCore + CryptoRng>(
         &mut self,
-        public_key: &PublicKey,
+        public_key: &FmdPublicKey,
         rng: &mut R,
     ) -> FlagCiphertexts {
-        let gpk = GenericPublicKey {
+        let gpk = GenericFmdPublicKey {
             basepoint_eg: RISTRETTO_BASEPOINT_POINT,
-            keys: public_key.keys.clone(),
+            keys: public_key.subkeys.clone(),
         };
 
         GenericFlagCiphertexts::generate_flag(&gpk, &ChamaleonHashBasepoint::default(), rng).into()
@@ -103,6 +105,3 @@ impl FmdScheme<PublicKey, FlagCiphertexts> for Fmd2 {
         detection_key.detect(&gfc)
     }
 }
-
-/// FMD2 is proven to be IND-CCA secure in the [FMD paper](https://eprint.iacr.org/2021/089).
-impl CcaSecure for Fmd2 {}

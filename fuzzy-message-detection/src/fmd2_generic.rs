@@ -1,5 +1,6 @@
-// An internal generic implementation of the FMD2 flag and detect algorithms.
-// It uses arbitrary basepoints for ElGamal encryption and the Chamaleon Hash.
+// An internal generic implementation of the flag and detect algorithms
+// used by the MultiFMd2 and MultiFmd2Compact implementations.
+// It uses arbitrary basepoints for  ElGamal encryption and the Chamaleon Hash.
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 
@@ -11,10 +12,10 @@ use sha2::{Digest, Sha256, Sha512};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// γ secret keys (scalars). For minimum false-positive rate p:=2^{-γ}.
-pub struct SecretKey(pub(crate) Vec<Scalar>);
+/// γ secret subkeys (scalars). For minimum false-positive rate p:=2^{-γ}.
+pub struct FmdSecretKey(pub(crate) Vec<Scalar>);
 
-impl SecretKey {
+impl FmdSecretKey {
     pub(crate) fn generate_keys<R: RngCore + CryptoRng>(gamma: usize, rng: &mut R) -> Self {
         let keys = (0..gamma).map(|_| Scalar::random(rng)).collect();
 
@@ -40,7 +41,7 @@ impl SecretKey {
 
         Some(DetectionKey {
             indices: indices.to_vec(),
-            keys,
+            subkeys: keys,
         })
     }
 
@@ -80,9 +81,9 @@ impl SecretKey {
         Some(detection_keys)
     }
 
-    pub(crate) fn generate_public_key(&self, basepoint: &RistrettoPoint) -> GenericPublicKey {
+    pub(crate) fn generate_public_key(&self, basepoint: &RistrettoPoint) -> GenericFmdPublicKey {
         let keys = self.0.iter().map(|k| k * basepoint).collect();
-        GenericPublicKey {
+        GenericFmdPublicKey {
             basepoint_eg: *basepoint,
             keys,
         }
@@ -91,10 +92,10 @@ impl SecretKey {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// A subset of n-out-γ secret keys and the positions
-/// they occupy in [SecretKey].
+/// A subset of n-out-γ secret subkeys, and the positions
+/// they occupy in [FmdSecretKey].
 pub struct DetectionKey {
-    pub(crate) keys: Vec<Scalar>,
+    pub(crate) subkeys: Vec<Scalar>,
 
     pub(crate) indices: Vec<usize>,
 }
@@ -106,7 +107,7 @@ impl DetectionKey {
         let m = hash_flag_ciphertexts(&u, &bit_ciphertexts);
         let w = flag_ciphers.basepoint_ch * m + flag_ciphers.u * flag_ciphers.y;
         let mut success = true;
-        for (xi, index) in self.keys.iter().zip(self.indices.iter()) {
+        for (xi, index) in self.subkeys.iter().zip(self.indices.iter()) {
             let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
             success = success && k_i != bit_ciphertexts[*index]
         }
@@ -116,7 +117,7 @@ impl DetectionKey {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct GenericPublicKey {
+pub(crate) struct GenericFmdPublicKey {
     pub(crate) basepoint_eg: RistrettoPoint, // Basepoint to generate the DDH mask (for ElGamal).
     pub(crate) keys: Vec<RistrettoPoint>,
 }
@@ -127,7 +128,7 @@ pub(crate) struct ChamaleonHashBasepoint {
 }
 
 impl ChamaleonHashBasepoint {
-    pub(crate) fn new(pk: &GenericPublicKey, dlog: &Scalar) -> ChamaleonHashBasepoint {
+    pub(crate) fn new(pk: &GenericFmdPublicKey, dlog: &Scalar) -> ChamaleonHashBasepoint {
         ChamaleonHashBasepoint {
             base: pk.basepoint_eg * dlog,
             dlog: *dlog,
@@ -168,7 +169,7 @@ impl GenericFlagCiphertexts {
     }
 
     pub(crate) fn generate_flag<R: RngCore + CryptoRng>(
-        pk: &GenericPublicKey,
+        pk: &GenericFmdPublicKey,
         basepoint_ch: &ChamaleonHashBasepoint,
         rng: &mut R,
     ) -> Self {
@@ -280,7 +281,7 @@ mod tests {
     fn test_extract_checks() {
         let mut csprng = rand_core::OsRng;
 
-        let sk = SecretKey::generate_keys(5, &mut csprng);
+        let sk = FmdSecretKey::generate_keys(5, &mut csprng);
 
         assert!(sk.extract(&[0, 0, 1]).is_none());
         assert!(sk.extract(&[0, 1, 2, 3, 4, 5, 6]).is_none());
@@ -292,20 +293,20 @@ mod tests {
         let mut csprng = rand_core::OsRng;
 
         let gamma = 12;
-        let sk = SecretKey::generate_keys(gamma, &mut csprng);
+        let sk = FmdSecretKey::generate_keys(gamma, &mut csprng);
 
         let detection_keys = sk.multi_extract(5, 3, 7, 7 + (5 - 3) * 7 / 3).unwrap();
         // check correct split size: n_1 = n_2 = n_3 = n_4 = 2, n_5 = 3
-        assert_eq!(detection_keys[0].keys.len(), 2);
-        assert_eq!(detection_keys[1].keys.len(), 2);
-        assert_eq!(detection_keys[2].keys.len(), 2);
-        assert_eq!(detection_keys[3].keys.len(), 2);
-        assert_eq!(detection_keys[4].keys.len(), 3);
+        assert_eq!(detection_keys[0].subkeys.len(), 2);
+        assert_eq!(detection_keys[1].subkeys.len(), 2);
+        assert_eq!(detection_keys[2].subkeys.len(), 2);
+        assert_eq!(detection_keys[3].subkeys.len(), 2);
+        assert_eq!(detection_keys[4].subkeys.len(), 3);
         // check disjoint split
         for i in 0..5 {
             for j in i + 1..5 {
-                for key in detection_keys[i].keys.iter() {
-                    assert_eq!(false, detection_keys[j].keys.contains(key));
+                for key in detection_keys[i].subkeys.iter() {
+                    assert_eq!(false, detection_keys[j].subkeys.contains(key));
                 }
             }
         }
@@ -359,10 +360,10 @@ mod tests {
 
     fn generate_keys_and_basepoint_ch(
         gamma: usize,
-    ) -> (SecretKey, GenericPublicKey, ChamaleonHashBasepoint) {
+    ) -> (FmdSecretKey, GenericFmdPublicKey, ChamaleonHashBasepoint) {
         let mut csprng = rand_core::OsRng;
 
-        let sk = SecretKey::generate_keys(gamma, &mut csprng);
+        let sk = FmdSecretKey::generate_keys(gamma, &mut csprng);
         let pk = sk.generate_public_key(&RISTRETTO_BASEPOINT_POINT);
         let basepoint_ch = ChamaleonHashBasepoint {
             base: RISTRETTO_BASEPOINT_POINT,

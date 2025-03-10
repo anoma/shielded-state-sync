@@ -5,7 +5,7 @@ use alloc::vec;
 pub struct FilterCombiner;
 
 impl FilterCombiner {
-    /// Combines messages whose flags have been filtered ([detected](crate::FmdScheme::detect)) with
+    /// Combines messages whose flags have been filtered ([detected](crate::MultiFmdScheme::detect)) with
     /// different detection keys.
     pub fn combine<T: Eq + Clone>(filtered_messages: &[vec::Vec<T>]) -> vec::Vec<T> {
         if filtered_messages.is_empty() {
@@ -13,10 +13,7 @@ impl FilterCombiner {
         }
         let mut result = vec![];
         filtered_messages[0].iter().for_each(|msg| {
-            if filtered_messages[1..]
-                .iter()
-                .all(|list| list.contains(&msg))
-            {
+            if filtered_messages[1..].iter().all(|list| list.contains(msg)) {
                 result.push(msg.clone());
             }
         });

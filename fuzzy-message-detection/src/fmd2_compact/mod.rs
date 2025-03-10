@@ -1,6 +1,4 @@
-//! The FMD2 scheme with key derivation and diversification.
-//!
-//! Implements the scheme sketched [here](https://research.anoma.net/t/shorter-fmd-public-keys-is-it-possible/1074/4?u=kike).
+//! A multi-key FMD scheme with key expansion and key randomization.
 use alloc::vec::Vec;
 
 use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, Scalar};
@@ -8,8 +6,8 @@ use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 
 mod polynomial;
 use crate::{
-    fmd2_generic::{ChamaleonHashBasepoint, GenericFlagCiphertexts, GenericPublicKey},
-    CcaSecure, Derive, Diversify, FmdKeyGen, FmdScheme, SecretKey,
+    fmd2_generic::{ChamaleonHashBasepoint, GenericFlagCiphertexts, GenericFmdPublicKey},
+    FmdKeyGen, FmdSecretKey, KeyExpansion, KeyRandomization, MultiFmdScheme,
 };
 
 /// A polynomial over the scalar field of Ristretto of degree = `t` (the threshold parameter).
@@ -23,23 +21,23 @@ pub struct CompactPublicKey(EncodedPolynomial);
 /// The evaluations of the secret polynomial
 /// encoded using an arbitrary basepoint.
 #[derive(PartialEq, Debug, Clone)]
-pub struct FmdPolyPublicKey(PointEvaluations);
+pub struct FmdPublicKey(PointEvaluations);
 
 /// The basepoint for the chamaleon hash,
 /// and `u`, `y`, `c`.
-pub struct FmdPolyCiphertexts(GenericFlagCiphertexts);
+pub struct FlagCiphertexts(GenericFlagCiphertexts);
 
-/// The polyonmial-based FMD2 scheme.
-pub struct Fmd2Poly {
+/// The multi-key FMD scheme supporting key expansion and key randomization.
+pub struct MultiFmd2CompactScheme {
     // The threshold parameter
     threshold: usize,
     //the γ public scalars to derive keys from.
     pub(crate) public_scalars: Vec<Scalar>,
-    // The derived public key.
-    derived_pk: Option<FmdPolyPublicKey>,
+    // The randomized public key.
+    randomized_pk: Option<FmdPublicKey>,
 }
 
-impl Fmd2Poly {
+impl MultiFmd2CompactScheme {
     /// Public scalars default to 1,...,γ in Z_q.
     pub fn new(gamma: usize, threshold: usize) -> Self {
         let mut public_scalars = Vec::new();
@@ -49,15 +47,15 @@ impl Fmd2Poly {
             public_scalars.push(scalar);
             scalar += Scalar::ONE;
         }
-        Fmd2Poly {
+        MultiFmd2CompactScheme {
             threshold,
             public_scalars,
-            derived_pk: None,
+            randomized_pk: None,
         }
     }
 }
 
-impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for Fmd2Poly {
+impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
     // Public keys generated have basepoint hardcoded to Ristretto basepoint.
     // Thus, the master or original public key (as opposed to diversified keys)
     fn generate_keys<R: rand_core::RngCore + rand_core::CryptoRng>(
@@ -76,89 +74,83 @@ impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for Fmd2Poly {
     }
 }
 
-impl FmdScheme<CompactPublicKey, FmdPolyCiphertexts> for Fmd2Poly {
+impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for MultiFmd2CompactScheme {
     fn flag<R: rand_core::RngCore + rand_core::CryptoRng>(
         &mut self,
         public_key: &CompactPublicKey,
         rng: &mut R,
-    ) -> FmdPolyCiphertexts {
-        if self.derived_pk.is_none() {
+    ) -> FlagCiphertexts {
+        if self.randomized_pk.is_none() {
             // Just derive on first call.
-            let derived_pk = self.derive_publicly(public_key);
-            self.derived_pk = Some(derived_pk);
+            let derived_pk = self.expand_public_key(public_key);
+            self.randomized_pk = Some(derived_pk);
         }
 
-        let gpk = GenericPublicKey {
-            basepoint_eg: self.derived_pk.clone().unwrap().0.basepoint,
-            keys: self.derived_pk.clone().unwrap().0.results.clone(),
+        let gpk = GenericFmdPublicKey {
+            basepoint_eg: self.randomized_pk.clone().unwrap().0.basepoint,
+            keys: self.randomized_pk.clone().unwrap().0.results.clone(),
         };
         let trapdoor = Scalar::random(rng);
 
-        FmdPolyCiphertexts(GenericFlagCiphertexts::generate_flag(
+        FlagCiphertexts(GenericFlagCiphertexts::generate_flag(
             &gpk,
             &ChamaleonHashBasepoint::new(&gpk, &trapdoor),
             rng,
         ))
     }
 
-    fn detect(
-        &self,
-        detection_key: &crate::DetectionKey,
-        flag_ciphers: &FmdPolyCiphertexts,
-    ) -> bool {
+    fn detect(&self, detection_key: &crate::DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
         detection_key.detect(&flag_ciphers.0)
     }
 }
 
-impl Derive<CompactSecretKey, CompactPublicKey, FmdPolyPublicKey> for Fmd2Poly {
-    fn derive(
+impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd2CompactScheme {
+    fn expand_keypair(
         &self,
         parent_sk: &CompactSecretKey,
         parent_pk: &CompactPublicKey,
-    ) -> (SecretKey, FmdPolyPublicKey) {
+    ) -> (FmdSecretKey, FmdPublicKey) {
         let evaluations = parent_sk.0.evaluate(&self.public_scalars);
         let encoded_evaluations = evaluations.encode(&parent_pk.0.basepoint);
 
         (
-            SecretKey(evaluations.results),
-            FmdPolyPublicKey(encoded_evaluations),
+            FmdSecretKey(evaluations.results),
+            FmdPublicKey(encoded_evaluations),
         )
     }
 
-    fn derive_publicly(&self, parent_pk: &CompactPublicKey) -> FmdPolyPublicKey {
+    fn expand_public_key(&self, parent_pk: &CompactPublicKey) -> FmdPublicKey {
         let encoded_evaluations = parent_pk.0.evaluate(&self.public_scalars);
 
-        FmdPolyPublicKey(encoded_evaluations)
+        FmdPublicKey(encoded_evaluations)
     }
 }
 
-impl Diversify<CompactSecretKey, CompactPublicKey> for Fmd2Poly {
-    fn diversify(&self, sk: &CompactSecretKey, diversifier_tag: &[u8; 64]) -> CompactPublicKey {
+impl KeyRandomization<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
+    fn randomize(&self, sk: &CompactSecretKey, diversifier_tag: &[u8; 64]) -> CompactPublicKey {
         let encoded_polynomial = sk.0.encode_with_hashed_basepoint(diversifier_tag);
 
         CompactPublicKey(encoded_polynomial)
     }
 }
 
-impl CcaSecure for Fmd2Poly {}
-
 #[cfg(test)]
 mod tests {
     use sha2::{Digest, Sha512};
 
-    use super::{polynomial::encode_coefficients, Fmd2Poly};
-    use crate::{Derive, Diversify, FmdKeyGen, FmdScheme};
+    use super::{polynomial::encode_coefficients, MultiFmd2CompactScheme};
+    use crate::{FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme};
 
     #[test]
     fn test_derive_is_correct() -> () {
         let mut csprng = rand_core::OsRng;
 
-        let fmdpoly = Fmd2Poly::new(10, 3);
+        let fmdpoly = MultiFmd2CompactScheme::new(10, 3);
         let (master_csk, master_cpk) = fmdpoly.generate_keys(&mut csprng);
 
-        let (_fmd_sk, fmd_pk) = fmdpoly.derive(&master_csk, &master_cpk);
+        let (_fmd_sk, fmd_pk) = fmdpoly.expand_keypair(&master_csk, &master_cpk);
 
-        let fmd_pk_derived_publicly = fmdpoly.derive_publicly(&master_cpk);
+        let fmd_pk_derived_publicly = fmdpoly.expand_public_key(&master_cpk);
 
         assert_eq!(fmd_pk, fmd_pk_derived_publicly);
     }
@@ -167,15 +159,15 @@ mod tests {
     fn test_derive_and_diversify_are_compatible() -> () {
         let mut csprng = rand_core::OsRng;
 
-        let fmdpoly = Fmd2Poly::new(10, 3);
+        let fmdpoly = MultiFmd2CompactScheme::new(10, 3);
         let (master_csk, master_cpk) = fmdpoly.generate_keys(&mut csprng);
 
         // Diversify and derive.
-        let cpk_diversified = fmdpoly.diversify(&master_csk, &[0; 64]);
-        let fmd_pk_from_diversified = fmdpoly.derive_publicly(&cpk_diversified);
+        let cpk_diversified = fmdpoly.randomize(&master_csk, &[0; 64]);
+        let fmd_pk_from_diversified = fmdpoly.expand_public_key(&cpk_diversified);
 
         // Derive directly from master.
-        let (fmd_sk, _) = fmdpoly.derive(&master_csk, &master_cpk);
+        let (fmd_sk, _) = fmdpoly.expand_keypair(&master_csk, &master_cpk);
         let fmd_pk_from_master = encode_coefficients(&fmd_sk.0, &cpk_diversified.0.basepoint);
 
         assert_eq!(fmd_pk_from_diversified.0.results, fmd_pk_from_master);
@@ -187,11 +179,11 @@ mod tests {
 
         let gamma = 10;
 
-        let mut fmdpoly = Fmd2Poly::new(gamma, 3);
+        let mut fmdpoly = MultiFmd2CompactScheme::new(gamma, 3);
         let (master_csk, master_cpk) = fmdpoly.generate_keys(&mut csprng);
 
         // Generate the FMD secret key and extract a detection key.
-        let (fmd_sk, _fmd_pk) = fmdpoly.derive(&master_csk, &master_cpk);
+        let (fmd_sk, _fmd_pk) = fmdpoly.expand_keypair(&master_csk, &master_cpk);
         let dsk = fmdpoly
             .multi_extract(&fmd_sk, 1, 1, 4, 4)
             .unwrap()
@@ -203,8 +195,8 @@ mod tests {
         let tag1 = hash_into_64_bytes(b"some diversifier tag");
         let tag2 = hash_into_64_bytes(b"another diversifier tag");
 
-        let cpk_diversified_1 = fmdpoly.diversify(&master_csk, &tag1);
-        let cpk_diversified_2 = fmdpoly.diversify(&master_csk, &tag2);
+        let cpk_diversified_1 = fmdpoly.randomize(&master_csk, &tag1);
+        let cpk_diversified_2 = fmdpoly.randomize(&master_csk, &tag2);
 
         // Flags under distinct diversified public keys yield same detection output.
         for _i in 0..10 {

@@ -1,7 +1,7 @@
 //! A multi-key FMD scheme with key expansion and key randomization.
 use alloc::vec::Vec;
 
-use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, Scalar};
+use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, RistrettoPoint, Scalar};
 use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,30 @@ pub struct CompactSecretKey(Polynomial);
 /// t+1 points the encoded coefficients.
 pub struct CompactPublicKey(EncodedPolynomial);
 
+impl CompactPublicKey {
+    /// Compress this key by dropping its basepoint.
+    pub fn compress(&self) -> CompressedCompactPublicKey {
+        CompressedCompactPublicKey {
+            coeffs: self.0.coeffs.clone(),
+        }
+    }
+}
+
+/// A compressed representation that drops the basepoint.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CompressedCompactPublicKey {
+    coeffs: Vec<RistrettoPoint>,
+}
+
+impl CompressedCompactPublicKey {
+    pub fn decompress(&self, tag: &[u8; 64]) -> CompactPublicKey {
+        CompactPublicKey(EncodedPolynomial {
+            basepoint: RistrettoPoint::from_uniform_bytes(tag),
+            coeffs: self.coeffs.clone(),
+        })
+    }
+}
+
 /// The evaluations of the secret polynomial
 /// encoded using an arbitrary basepoint.
 #[derive(PartialEq, Debug, Clone)]
@@ -28,6 +52,7 @@ pub struct FmdPublicKey(PointEvaluations);
 
 /// The basepoint for the chamaleon hash,
 /// and `u`, `y`, `c`.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlagCiphertexts(GenericFlagCiphertexts);
 
 /// The multi-key FMD scheme supporting key expansion and key randomization.
@@ -130,8 +155,8 @@ impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd
 }
 
 impl KeyRandomization<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
-    fn randomize(&self, sk: &CompactSecretKey, diversifier_tag: &[u8; 64]) -> CompactPublicKey {
-        let encoded_polynomial = sk.0.encode_with_hashed_basepoint(diversifier_tag);
+    fn randomize(&self, sk: &CompactSecretKey, tag: &[u8; 64]) -> CompactPublicKey {
+        let encoded_polynomial = sk.0.encode_with_hashed_basepoint(tag);
 
         CompactPublicKey(encoded_polynomial)
     }

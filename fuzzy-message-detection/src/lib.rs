@@ -49,7 +49,7 @@ pub trait KeyExpansion<SK, PK, DPK>: FmdKeyGen<SK, PK> {
 /// A trait to randomize public keys.
 ///
 /// - Key expansion and key randomization are compatible if FMD secret keys
-/// of FMD public keys expanded from randomized compact keys are the same.
+///   of FMD public keys expanded from randomized compact keys are the same.
 //
 //   (sk1,pk1)----diversify----> pk2
 //      |                         |
@@ -61,7 +61,7 @@ pub trait KeyExpansion<SK, PK, DPK>: FmdKeyGen<SK, PK> {
 //  (sk3,pk3)                    pk4 such that sk3 = secret_key(pk4)
 ///
 /// - Key randomization must be unlinkable: it is not possible to tell whether any two public keys
-/// were randomized from the same input keypair.
+///   were randomized from the same input keypair.
 pub trait KeyRandomization<SK, PK>: FmdKeyGen<SK, PK> {
     /// The randomized public key is bound to the tag. Different tags yield
     /// different randomized public keys.

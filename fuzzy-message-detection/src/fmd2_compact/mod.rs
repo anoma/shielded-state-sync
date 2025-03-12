@@ -3,6 +3,8 @@ use alloc::vec::Vec;
 
 use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, Scalar};
 use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 mod polynomial;
 use crate::{
@@ -11,6 +13,7 @@ use crate::{
 };
 
 /// A polynomial over the scalar field of Ristretto of degree = `t` (the threshold parameter).
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CompactSecretKey(Polynomial);
 
 /// An encoded polynomial over Ristretto. t+2 points.
@@ -29,11 +32,11 @@ pub struct FlagCiphertexts(GenericFlagCiphertexts);
 
 /// The multi-key FMD scheme supporting key expansion and key randomization.
 pub struct MultiFmd2CompactScheme {
-    // The threshold parameter
+    /// The threshold parameter
     threshold: usize,
-    //the γ public scalars to derive keys from.
+    ///the γ public scalars to derive keys from.
     pub(crate) public_scalars: Vec<Scalar>,
-    // The randomized public key.
+    /// The randomized public key.
     randomized_pk: Option<FmdPublicKey>,
 }
 
@@ -56,8 +59,8 @@ impl MultiFmd2CompactScheme {
 }
 
 impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
-    // Public keys generated have basepoint hardcoded to Ristretto basepoint.
-    // Thus, the master or original public key (as opposed to diversified keys)
+    /// Public keys generated have basepoint hardcoded to Ristretto basepoint.
+    /// Thus, the master or original public key (as opposed to diversified keys)
     fn generate_keys<R: rand_core::RngCore + rand_core::CryptoRng>(
         &self,
         rng: &mut R,

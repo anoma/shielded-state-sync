@@ -1,27 +1,30 @@
 use alloc::vec::Vec;
 
 use curve25519_dalek::{RistrettoPoint, Scalar};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
-// A degree `t` polynomial p(X) in Z_q[X] given by its t+1 coefficients.
+/// A degree `t` polynomial p(X) in Z_q[X] given by its t+1 coefficients.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub(crate) struct Polynomial {
     coeffs: Vec<Scalar>,
 }
 
-// A degree t polynomial encoded in the exponent of a Ristretto point
-// given by its t+1 points.
+/// A degree t polynomial encoded in the exponent of a Ristretto point
+/// given by its t+1 points.
 pub(crate) struct EncodedPolynomial {
     pub(crate) basepoint: RistrettoPoint,
     pub(crate) coeffs: Vec<RistrettoPoint>,
 }
 
-// γ scalar evaluations of the polynomial p(X) at public scalars.
-// result[i] = p(public_scalar[i])
+/// γ scalar evaluations of the polynomial p(X) at public scalars.
+/// result[i] = p(public_scalar[i])
 pub(crate) struct ScalarEvaluations {
     pub(crate) results: Vec<Scalar>,
 }
 
-// γ point evaluations of the polynomial p(X) at public scalars.
-// result[i] = p(public_scalar[i]) * basepoint
+/// γ point evaluations of the polynomial p(X) at public scalars.
+/// result[i] = p(public_scalar[i]) * basepoint
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) struct PointEvaluations {
     pub(crate) basepoint: RistrettoPoint,
@@ -47,8 +50,8 @@ impl Polynomial {
         }
     }
 
-    // Basepoint determined by input bytes.
-    // The input bytes should be uniform to ensure the dlog generated point is unknown.
+    /// Basepoint determined by input bytes.
+    /// The input bytes should be uniform to ensure the dlog generated point is unknown.
     pub(crate) fn encode_with_hashed_basepoint(
         &self,
         public_bytes: &[u8; 64],

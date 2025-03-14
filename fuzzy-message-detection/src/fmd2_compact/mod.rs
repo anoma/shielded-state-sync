@@ -170,70 +170,69 @@ mod tests {
     use crate::{FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme};
 
     #[test]
-    fn test_derive_is_correct() -> () {
+    fn test_expand_is_correct() -> () {
         let mut csprng = rand_core::OsRng;
 
-        let fmdpoly = MultiFmd2CompactScheme::new(10, 3);
-        let (master_csk, master_cpk) = fmdpoly.generate_keys(&mut csprng);
+        let compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
+        let (master_csk, master_cpk) = compact_multi_fmd2.generate_keys(&mut csprng);
 
-        let (_fmd_sk, fmd_pk) = fmdpoly.expand_keypair(&master_csk, &master_cpk);
+        let (_fmd_sk, fmd_pk) = compact_multi_fmd2.expand_keypair(&master_csk, &master_cpk);
 
-        let fmd_pk_derived_publicly = fmdpoly.expand_public_key(&master_cpk);
+        let fmd_pk_expanded_publicly = compact_multi_fmd2.expand_public_key(&master_cpk);
 
-        assert_eq!(fmd_pk, fmd_pk_derived_publicly);
+        assert_eq!(fmd_pk, fmd_pk_expanded_publicly);
     }
 
     #[test]
-    fn test_derive_and_diversify_are_compatible() -> () {
+    fn test_expand_and_randomize_are_compatible() -> () {
         let mut csprng = rand_core::OsRng;
 
-        let fmdpoly = MultiFmd2CompactScheme::new(10, 3);
-        let (master_csk, master_cpk) = fmdpoly.generate_keys(&mut csprng);
+        let compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
+        let (master_csk, master_cpk) = compact_multi_fmd2.generate_keys(&mut csprng);
 
-        // Diversify and derive.
-        let cpk_diversified = fmdpoly.randomize(&master_csk, &[0; 64]);
-        let fmd_pk_from_diversified = fmdpoly.expand_public_key(&cpk_diversified);
+        // Randomize then expand.
+        let rand_cpk = compact_multi_fmd2.randomize(&master_csk, &[0; 64]);
+        let fmd_pk = compact_multi_fmd2.expand_public_key(&rand_cpk);
 
-        // Derive directly from master.
-        let (fmd_sk, _) = fmdpoly.expand_keypair(&master_csk, &master_cpk);
-        let fmd_pk_from_master = encode_coefficients(&fmd_sk.0, &cpk_diversified.0.basepoint);
+        // Expand directly from master.
+        let (fmd_sk, _) = compact_multi_fmd2.expand_keypair(&master_csk, &master_cpk);
+        let fmd_pk_from_master = encode_coefficients(&fmd_sk.0, &rand_cpk.0.basepoint);
 
-        assert_eq!(fmd_pk_from_diversified.0.results, fmd_pk_from_master);
+        assert_eq!(fmd_pk.0.results, fmd_pk_from_master);
     }
 
     #[test]
-    fn test_same_detection_key_for_diversified_fmd_public_keys() -> () {
+    fn test_same_detection_key_for_randomized_compact_public_keys() -> () {
         let mut csprng = rand_core::OsRng;
 
         let gamma = 10;
 
-        let mut fmdpoly = MultiFmd2CompactScheme::new(gamma, 3);
-        let (master_csk, master_cpk) = fmdpoly.generate_keys(&mut csprng);
+        let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(gamma, 3);
+        let (master_csk, master_cpk) = compact_multi_fmd2.generate_keys(&mut csprng);
 
-        // Generate the FMD secret key and extract a detection key.
-        let (fmd_sk, _fmd_pk) = fmdpoly.expand_keypair(&master_csk, &master_cpk);
-        let dsk = fmdpoly
+        // Expand onto the FMD secret key and extract a detection key.
+        let (fmd_sk, _fmd_pk) = compact_multi_fmd2.expand_keypair(&master_csk, &master_cpk);
+        let dsk = compact_multi_fmd2
             .multi_extract(&fmd_sk, 1, 1, 4, 4)
             .unwrap()
             .pop()
             .unwrap();
 
-        // Diversify twice.
+        // Randomize twice.
+        let tag1 = hash_into_64_bytes(b"some public tag");
+        let tag2 = hash_into_64_bytes(b"another public tag");
 
-        let tag1 = hash_into_64_bytes(b"some diversifier tag");
-        let tag2 = hash_into_64_bytes(b"another diversifier tag");
+        let rand_cpk_1 = compact_multi_fmd2.randomize(&master_csk, &tag1);
+        let rand_cpk_2 = compact_multi_fmd2.randomize(&master_csk, &tag2);
 
-        let cpk_diversified_1 = fmdpoly.randomize(&master_csk, &tag1);
-        let cpk_diversified_2 = fmdpoly.randomize(&master_csk, &tag2);
-
-        // Flags under distinct diversified public keys yield same detection output.
+        // Flags under distinct randomized public keys yield same detection output.
         for _i in 0..10 {
-            let flag_ciphers_1 = fmdpoly.flag(&cpk_diversified_1, &mut csprng);
-            let flag_ciphers_2 = fmdpoly.flag(&cpk_diversified_2, &mut csprng);
+            let flag_ciphers_1 = compact_multi_fmd2.flag(&rand_cpk_1, &mut csprng);
+            let flag_ciphers_2 = compact_multi_fmd2.flag(&rand_cpk_2, &mut csprng);
 
             assert_eq!(
-                fmdpoly.detect(&dsk, &flag_ciphers_1),
-                fmdpoly.detect(&dsk, &flag_ciphers_2)
+                compact_multi_fmd2.detect(&dsk, &flag_ciphers_1),
+                compact_multi_fmd2.detect(&dsk, &flag_ciphers_2)
             );
         }
     }

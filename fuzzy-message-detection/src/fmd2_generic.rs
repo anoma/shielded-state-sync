@@ -148,6 +148,8 @@ impl Default for ChamaleonHashBasepoint {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+
 pub(crate) struct GenericFlagCiphertexts {
     pub(crate) basepoint_ch: RistrettoPoint, // Basepoint for the Chamaleon Hash.
     pub(crate) u: RistrettoPoint,

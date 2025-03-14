@@ -170,7 +170,7 @@ mod tests {
     use crate::{FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme};
 
     #[test]
-    fn test_expand_is_correct() -> () {
+    fn test_expand_is_correct() {
         let mut csprng = rand_core::OsRng;
 
         let compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_and_randomize_are_compatible() -> () {
+    fn test_expand_and_randomize_are_compatible() {
         let mut csprng = rand_core::OsRng;
 
         let compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
@@ -202,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn test_same_detection_key_for_randomized_compact_public_keys() -> () {
+    fn test_same_detection_key_for_randomized_compact_public_keys() {
         let mut csprng = rand_core::OsRng;
 
         let gamma = 10;

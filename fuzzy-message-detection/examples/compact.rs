@@ -63,17 +63,17 @@ fn main() {
 
     println!("[Sender side]");
 
-    // Decompress compact public key.
     println!(
         "\tDecompressing the transmitted compact public key (using same receiver's public tag)"
     );
     let cmp_pk_1 = c_cmp_pk.decompress(&tag_bytes);
 
-    // Flag twice for same receiver.
     println!("\tFlagging a message with the compact public key (in the first flag operation the compact public key is expanded)...");
     let _flag = compact_multi_fmd2.flag(&cmp_pk_1, &mut csprng);
 
-    // Don't forget to reset `compact_multi_fmd2` if flagging to another receiver!
+    // Don't forget to reset `compact_multi_fmd2` if flagging for another receiver!
+    // let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(gamma, t);
+    // let flag = compact_multi_fmd2.flag(&another_compact_public_key, &mut csprng);
 
     println!("[Rest of the workflow]");
     println!("\tDetection servers and back to receiver side: As in the basic multi-key FMD2 scheme. Run example `basic.rs`")

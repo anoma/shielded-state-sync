@@ -11,6 +11,7 @@ pub mod fmd2_compact;
 pub(crate) mod fmd2_generic;
 pub use crate::combiner::FilterCombiner;
 pub use crate::fmd2_generic::{DetectionKey, FmdSecretKey};
+
 /// A trait for a Fuzzy Message Detection (FMD) scheme with multi-key extraction.
 pub trait MultiFmdScheme<PK, F> {
     fn flag<R: RngCore + CryptoRng>(&mut self, public_key: &PK, rng: &mut R) -> F;

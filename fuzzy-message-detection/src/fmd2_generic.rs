@@ -281,6 +281,19 @@ mod tests {
     use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 
     #[test]
+    fn test_flag_detect_out_of_bounds() {
+        let mut csprng = rand_core::OsRng;
+
+        let (sk, _, _) = generate_keys_and_basepoint_ch(10);
+        let dk = sk.extract(&(8..10).collect::<Vec<_>>()).unwrap();
+
+        let (_, pk, basepoint_ch) = generate_keys_and_basepoint_ch(2);
+
+        let flag_cipher = GenericFlagCiphertexts::generate_flag(&pk, &basepoint_ch, &mut csprng);
+        _ = dk.detect(&flag_cipher);
+    }
+
+    #[test]
     fn test_flag_detect() {
         let mut csprng = rand_core::OsRng;
 

@@ -241,6 +241,6 @@ mod tests {
         let mut hasher = Sha512::new();
         hasher.update(bytes);
 
-        hasher.finalize().try_into().unwrap()
+        hasher.finalize().into()
     }
 }

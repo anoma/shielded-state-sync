@@ -22,18 +22,18 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Clippy (no_std)
-      run: cargo clippy --verbose
+      run: cargo clippy --verbose -- -D warnings
     - name: Clippy (no_std + serde)
-      run: cargo clippy --verbose --features serde
+      run: cargo clippy --verbose --features serde -- -D warnings
 
   clippy-with-tests:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Clippy (with tests)
-      run: cargo clippy --verbose --tests
+      run: cargo clippy --verbose --tests -- -D warnings
     - name: Clippy (with tests + serde)
-      run: cargo clippy --verbose --tests --features serde
+      run: cargo clippy --verbose --tests --features serde -- -D warnings
 
   test:
     runs-on: ubuntu-latest

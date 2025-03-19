@@ -26,7 +26,7 @@ mod tests {
     use super::FilterCombiner;
 
     #[test]
-    fn test_filter_combine() -> () {
+    fn test_filter_combine() {
         // interesects correctly
         let mut combined = FilterCombiner::combine(&[
             vec![0, 1, 2, 3, 4, 5],
@@ -38,12 +38,10 @@ mod tests {
 
         // combining disjoint messages yields empty
         combined = FilterCombiner::combine(&[vec![0, 1, 2], vec![3, 4]]);
-        assert_eq!(true, combined.is_empty());
+        assert!(combined.is_empty());
 
         // combining an empty vector yields empty
         combined = FilterCombiner::combine(&[vec![0, 1, 2], vec![]]);
-        assert_eq!(true, combined.is_empty());
-
-        ()
+        assert!(combined.is_empty());
     }
 }

@@ -293,7 +293,8 @@ mod tests {
     }
 
     #[test]
-    fn test_multi_extract_works() -> () {
+    #[allow(clippy::identity_op)]
+    fn test_multi_extract_works() {
         let mut csprng = rand_core::OsRng;
 
         let gamma = 12;
@@ -310,40 +311,33 @@ mod tests {
         for i in 0..5 {
             for j in i + 1..5 {
                 for key in detection_keys[i].subkeys.iter() {
-                    assert_eq!(false, detection_keys[j].subkeys.contains(key));
+                    assert!(!detection_keys[j].subkeys.contains(key));
                 }
             }
         }
 
         // check invalid rates are rejected
-        assert_eq!(
+        assert!(
             // threshold > #keys
-            true,
             sk.multi_extract(1, 2, 2, 2 + 1 - 2).is_none()
         );
-        assert_eq!(
+        assert!(
             // #keys > gamma
-            true,
             sk.multi_extract(gamma + 1, 2, 2, 2 + (gamma + 1) - 2)
                 .is_none()
         );
-        assert_eq!(
+        assert!(
             // threshold > leaked rate
-            true,
             sk.multi_extract(4, 3, 2, 2 + 4 - 3).is_none()
         );
-        assert_eq!(
+        assert!(
             // bad filtering rate
-            true,
             sk.multi_extract(4, 3, 3, (3 + 4 - 3) + 1).is_none()
         );
-        assert_eq!(
+        assert!(
             // filtering rate > gamma
-            true,
             sk.multi_extract(4, 3, 9, 10 + (4 - 3) * 10 / 3).is_none()
         );
-
-        ()
     }
 
     #[test]

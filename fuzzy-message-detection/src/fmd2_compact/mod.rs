@@ -170,7 +170,7 @@ mod tests {
     use crate::{FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme};
 
     #[test]
-    fn test_derive_is_correct() -> () {
+    fn test_derive_is_correct() {
         let mut csprng = rand_core::OsRng;
 
         let fmdpoly = MultiFmd2CompactScheme::new(10, 3);
@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn test_derive_and_diversify_are_compatible() -> () {
+    fn test_derive_and_diversify_are_compatible() {
         let mut csprng = rand_core::OsRng;
 
         let fmdpoly = MultiFmd2CompactScheme::new(10, 3);
@@ -202,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn test_same_detection_key_for_diversified_fmd_public_keys() -> () {
+    fn test_same_detection_key_for_diversified_fmd_public_keys() {
         let mut csprng = rand_core::OsRng;
 
         let gamma = 10;
@@ -242,6 +242,6 @@ mod tests {
         let mut hasher = Sha512::new();
         hasher.update(bytes);
 
-        hasher.finalize().try_into().unwrap()
+        hasher.finalize().into()
     }
 }

@@ -51,7 +51,7 @@ fn main() {
     println!(
         "\tRandomizing the compact public key using a public tag (does not change detection keys)"
     );
-    // Use a randomly-looking public tag to hash into basepoints.
+    // Use a random-looking public tag to hash into basepoints.
     let mut hasher = Sha512::new();
     hasher.update("some receiver public tag");
     let tag_bytes: [u8; 64] = hasher.finalize().try_into().unwrap();

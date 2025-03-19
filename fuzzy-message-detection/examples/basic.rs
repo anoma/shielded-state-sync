@@ -90,5 +90,5 @@ fn main() {
         "\t\tSize of combined shielded messages: {:?}",
         combined_messages.len()
     );
-    println!("\tNow, you can run trial-decryption on the combined shielded messages.");
+    println!("\tNow you can run trial-decryption on the combined shielded messages.");
 }

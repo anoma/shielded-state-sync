@@ -63,7 +63,7 @@ pub trait KeyExpansion<SK, PK, DPK>: FmdKeyGen<SK, PK> {
 ///
 /// - Key randomization must be unlinkable: it is not possible to tell whether any two public keys
 ///   were randomized from the same input keypair.
-pub trait KeyRandomization<SK, PK>: FmdKeyGen<SK, PK> {
+pub trait KeyRandomization<SK, PK> {
     /// The randomized public key is bound to the tag. Different tags yield
     /// different randomized public keys.
     /// The input tag _should_ be uniform (e.g. a hash digest).

@@ -11,6 +11,8 @@ For each pair `(d,t)`, there is an associated set `P(d,t)` of valid leaked and f
 * `p_l:=2^{-n}` and `n` is the number of (different) secret subkeys across any `t` detection keys, 
 * `p_f:=2^{-δ}`and `δ` is the total number of secret subkeys in the `d` detection keys.
 
+Thus, the leaked rate is the false-positive rate at which any coallition of `t` servers can filter. The filtering rate is the false-positive rate at which the receiver can filter, after receiving all the filters from the `d` servers.
+
 ## Key expansion and key randomization
 Two implementations are provided. The compact scheme generates short FMD public keys, which can be randomized. 
 * Compact public keys can be _publicly_ expanded into FMD public keys. This means that only compact keys need to be made public by key owners (receivers), saving bandwidth and storage.

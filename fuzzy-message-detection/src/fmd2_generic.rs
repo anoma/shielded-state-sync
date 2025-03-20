@@ -3,6 +3,7 @@
 // It uses arbitrary basepoints for  ElGamal encryption and the Chamaleon Hash.
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
+use core::hint::black_box;
 
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
@@ -143,17 +144,39 @@ pub struct DetectionKey {
 
 impl DetectionKey {
     pub(crate) fn detect(&self, flag_ciphers: &GenericFlagCiphertexts) -> bool {
-        let u = flag_ciphers.u;
-        let CiphertextBits(bit_ciphertexts) = flag_ciphers.c.decompress();
-        let m = hash_flag_ciphertexts(&u, &flag_ciphers.c);
-        let w = flag_ciphers.basepoint_ch * m + flag_ciphers.u * flag_ciphers.y;
-        let mut success = true;
-        for (xi, index) in self.subkeys.iter().zip(self.indices.iter()) {
-            let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
-            success = success && k_i != bit_ciphertexts[*index]
+        let GenericFlagCiphertexts {
+            basepoint_ch,
+            u,
+            y,
+            c,
+        } = flag_ciphers;
+
+        let CiphertextBits(bit_ciphertexts) = c.decompress();
+
+        // the false positive rate isn't private so this
+        // can run in variable time
+        if self
+            .indices
+            .iter()
+            .copied()
+            .any(|index| index >= bit_ciphertexts.len())
+        {
+            return false;
         }
 
-        success
+        let m = hash_flag_ciphertexts(u, c);
+        let w = basepoint_ch * m + u * y;
+
+        // however, when dealing with key material, we should only
+        // perform constant time ops
+        let mut success = 1u8;
+        for (xi, index) in self.subkeys.iter().zip(self.indices.iter()) {
+            let k_i = hash_to_flag_ciphertext_bit(u, &(u * xi), &w) as u8;
+            let flag_bit = bit_ciphertexts[*index] as u8;
+            success = black_box(success & k_i ^ flag_bit);
+        }
+
+        success == 1u8
     }
 }
 

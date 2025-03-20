@@ -172,7 +172,11 @@ impl DetectionKey {
         let mut success = 1u8;
         for (xi, index) in self.subkeys.iter().zip(self.indices.iter()) {
             let k_i = hash_to_flag_ciphertext_bit(u, &(u * xi), &w) as u8;
-            let flag_bit = bit_ciphertexts[*index] as u8;
+            let flag_bit = unsafe {
+                // SAFETY: we have asserted that no index within the dsk has
+                // a value greater than the length of the bit ciphertexts
+                *bit_ciphertexts.get_unchecked(*index) as u8
+            };
             success = black_box(success & k_i ^ flag_bit);
         }
 

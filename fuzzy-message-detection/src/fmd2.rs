@@ -43,7 +43,7 @@ impl From<GenericFlagCiphertexts> for FlagCiphertexts {
         FlagCiphertexts {
             u: value.u,
             y: value.y,
-            c: value.c,
+            c: value.c.0,
         } // Ignore basepoint.
     }
 }

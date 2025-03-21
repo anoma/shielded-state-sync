@@ -15,10 +15,10 @@ use sha2::{Digest, Sha256, Sha512};
 /// Compressed representation of the γ bit-ciphertexts of a [`GenericFlagCiphertexts`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub(crate) struct CompressedCiphertext(pub(crate) Vec<u8>);
+pub(crate) struct CompressedCiphertextBits(pub(crate) Vec<u8>);
 
-impl CompressedCiphertext {
-    fn decompress(&self) -> Ciphertext {
+impl CompressedCiphertextBits {
+    fn decompress(&self) -> CiphertextBits {
         let mut bit_ciphertexts = Vec::with_capacity(self.0.len() * 8);
         for byte in self.0.iter() {
             for i in 0..8 {
@@ -26,18 +26,18 @@ impl CompressedCiphertext {
             }
         }
 
-        Ciphertext(bit_ciphertexts)
+        CiphertextBits(bit_ciphertexts)
     }
 }
 
 /// Decompressed inner bit-ciphertexts of a [`GenericFlagCiphertexts`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub(crate) struct Ciphertext(pub(crate) Vec<bool>);
+pub(crate) struct CiphertextBits(pub(crate) Vec<bool>);
 
-impl Ciphertext {
-    fn compress(&self) -> CompressedCiphertext {
-        CompressedCiphertext(
+impl CiphertextBits {
+    fn compress(&self) -> CompressedCiphertextBits {
+        CompressedCiphertextBits(
             self.0
                 .chunks(8)
                 .map(|bits| {
@@ -144,7 +144,7 @@ pub struct DetectionKey {
 impl DetectionKey {
     pub(crate) fn detect(&self, flag_ciphers: &GenericFlagCiphertexts) -> bool {
         let u = flag_ciphers.u;
-        let Ciphertext(bit_ciphertexts) = flag_ciphers.c.decompress();
+        let CiphertextBits(bit_ciphertexts) = flag_ciphers.c.decompress();
         let m = hash_flag_ciphertexts(&u, &flag_ciphers.c);
         let w = flag_ciphers.basepoint_ch * m + flag_ciphers.u * flag_ciphers.y;
         let mut success = true;
@@ -192,7 +192,7 @@ pub(crate) struct GenericFlagCiphertexts {
     pub(crate) basepoint_ch: RistrettoPoint, // Basepoint for the Chamaleon Hash.
     pub(crate) u: RistrettoPoint,
     pub(crate) y: Scalar,
-    pub(crate) c: CompressedCiphertext,
+    pub(crate) c: CompressedCiphertextBits,
 }
 
 impl GenericFlagCiphertexts {
@@ -206,7 +206,7 @@ impl GenericFlagCiphertexts {
             basepoint_ch: *basepoint_ch,
             u: *u,
             y: *y,
-            c: CompressedCiphertext(c.to_vec()),
+            c: CompressedCiphertextBits(c.to_vec()),
         }
     }
 
@@ -220,7 +220,7 @@ impl GenericFlagCiphertexts {
         let u = pk.basepoint_eg * r;
         let w = basepoint_ch.base * z;
 
-        let bit_ciphertexts = Ciphertext(
+        let bit_ciphertexts = CiphertextBits(
             pk.keys
                 .iter()
                 .map(|pk_i| {
@@ -265,7 +265,7 @@ fn hash_to_flag_ciphertext_bit(
 // This is the hash G from Fig.3 of the FMD paper, instantiated with SHA512.
 fn hash_flag_ciphertexts(
     u: &RistrettoPoint,
-    CompressedCiphertext(ciphertexts): &CompressedCiphertext,
+    CompressedCiphertextBits(ciphertexts): &CompressedCiphertextBits,
 ) -> Scalar {
     let mut digest = Sha512::new();
 

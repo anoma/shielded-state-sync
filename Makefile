@@ -1,9 +1,11 @@
+ALL_FEATURES := serde
+
 .PHONY: all
 all: clippy-no-std-all-features
 
 .PHONY: clippy-no-std-all-features
 clippy-no-std-all-features:
-	cargo clippy --features serde -- -D warnings
+	cargo clippy --features $(ALL_FEATURES) -- -D warnings
 
 .PHONY: clippy-no-std
 clippy-no-std:
@@ -11,7 +13,7 @@ clippy-no-std:
 
 .PHONY: clippy-all
 clippy-all:
-	cargo clippy --features serde --all-targets --tests -- -D warnings
+	cargo clippy --features $(ALL_FEATURES) --all-targets --tests -- -D warnings
 
 .PHONY: docs
 docs:
@@ -28,3 +30,7 @@ fmt-check:
 .PHONY: test
 test:
 	cargo test
+
+.PHONY: bench
+bench:
+	cargo bench

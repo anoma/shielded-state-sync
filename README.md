@@ -22,7 +22,7 @@ Two implementations are provided. The compact scheme generates short FMD public 
 Feature `serde` enables serialization/deseralization of public keys, secret keys, detection keys, and flag ciphertexts.
 
 ## Benchmarks
-Run `cargo bench`.
+Run `make bench`.
 
 ## Examples
 See the examples folder.

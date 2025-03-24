@@ -54,7 +54,7 @@ fn main() {
     // Use a random-looking public tag to hash into basepoints.
     let mut hasher = Sha512::new();
     hasher.update("some receiver public tag");
-    let tag_bytes: [u8; 64] = hasher.finalize().try_into().unwrap();
+    let tag_bytes: [u8; 64] = hasher.finalize().into();
 
     let cmp_pk_1 = compact_multi_fmd2.randomize(&cmp_sk, &tag_bytes);
 

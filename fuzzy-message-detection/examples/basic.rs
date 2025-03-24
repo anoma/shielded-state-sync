@@ -73,7 +73,7 @@ fn main() {
         println!("\tFiltering messages in server {:?}...", j);
         let mut filtered_messages = vec![];
         for (message, flag) in storage_pool.iter() {
-            let is_positive = multi_fmd2.detect(&detection_key, &flag);
+            let is_positive = multi_fmd2.detect(detection_key, flag);
             if is_positive {
                 filtered_messages.push(message);
             }

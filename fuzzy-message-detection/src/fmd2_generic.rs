@@ -311,13 +311,19 @@ mod tests {
     fn test_flag_detect_out_of_bounds() {
         let mut csprng = rand_core::OsRng;
 
-        let (sk, _, _) = generate_keys_and_basepoint_ch(10);
-        let dk = sk.extract(&(8..10).collect::<Vec<_>>()).unwrap();
+        let (dk1, dk2) = {
+            let (sk, _, _) = generate_keys_and_basepoint_ch(10);
+            let dk1 = sk.extract(&(8..10).collect::<Vec<_>>()).unwrap();
+            let dk2 = sk.extract(&(1..7).collect::<Vec<_>>()).unwrap();
+            (dk1, dk2)
+        };
 
         let (_, pk, basepoint_ch) = generate_keys_and_basepoint_ch(2);
 
         let flag_cipher = GenericFlagCiphertexts::generate_flag(&pk, &basepoint_ch, &mut csprng);
-        _ = dk.detect(&flag_cipher);
+
+        _ = dk1.detect(&flag_cipher);
+        _ = dk2.detect(&flag_cipher);
     }
 
     #[test]

@@ -4,19 +4,20 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+[features]
+serde = ["dep:serde", "curve25519-dalek/serde"]
+sha2-force-soft = ["sha2/force-soft"]
+
 [dependencies]
 curve25519-dalek = { workspace = true, features = ["rand_core"] }
 rand_core = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"], optional = true }
-sha2 = { workspace = true, features = ["force-soft"] }
+sha2 = { workspace = true }
 subtle = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
 rand_core = { workspace = true, features = ["getrandom"] }
-
-[features]
-serde = ["dep:serde", "curve25519-dalek/serde"]
 
 [[bench]]
 name = "benchmark"

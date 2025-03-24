@@ -1,9 +1,9 @@
 // Run with `cargo run --example compact`
-use sha2::{Digest, Sha512};
-
-use fuzzy_message_detection::{
+use polyfuzzy::{
     fmd2_compact::MultiFmd2CompactScheme, FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme,
 };
+use sha2::{Digest, Sha512};
+
 fn main() {
     let mut csprng = rand_core::OsRng;
 

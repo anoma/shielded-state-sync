@@ -1,7 +1,7 @@
 // Run with `cargo run --example basic`
-use fuzzy_message_detection::{
-    fmd2::Fmd2MultikeyScheme, FilterCombiner, FmdKeyGen, MultiFmdScheme,
-};
+
+use polyfuzzy::{fmd2::Fmd2MultikeyScheme, FilterCombiner, FmdKeyGen, MultiFmdScheme};
+
 fn main() {
     let mut csprng = rand_core::OsRng;
 

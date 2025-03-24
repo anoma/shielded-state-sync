@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-
-use fuzzy_message_detection::{fmd2::Fmd2MultikeyScheme, FmdKeyGen, MultiFmdScheme};
+use polyfuzzy::{fmd2::Fmd2MultikeyScheme, FmdKeyGen, MultiFmdScheme};
 
 fn benchmark_flag(c: &mut Criterion) {
     let mut csprng = rand_core::OsRng;

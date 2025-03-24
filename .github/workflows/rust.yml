@@ -15,36 +15,34 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Check code formatting
-      run: cargo fmt --check
+      run: make fmt-check
 
   clippy-no-std:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Clippy (no_std)
-      run: cargo clippy --verbose -- -D warnings
-    - name: Clippy (no_std + serde)
-      run: cargo clippy --verbose --features serde -- -D warnings
+      run: make clippy-no-std
+    - name: Clippy (no_std + all features)
+      run: make clippy-no-std-all-features
 
-  clippy-with-tests:
+  clippy-all-targets:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Clippy (with tests)
-      run: cargo clippy --verbose --tests -- -D warnings
-    - name: Clippy (with tests + serde)
-      run: cargo clippy --verbose --tests --features serde -- -D warnings
+    - name: Clippy (all targets)
+      run: make clippy-all
 
   test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Run tests
-      run: cargo test --verbose
+      run: make test
 
   docs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Generate docs
-      run: cargo doc --verbose
+      run: make docs

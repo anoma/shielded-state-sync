@@ -223,18 +223,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
-name = "fuzzy-message-detection"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "curve25519-dalek",
- "rand_core",
- "serde",
- "sha2",
- "subtle",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -366,6 +354,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51bae2ac328883f7acdfea3d66a7c35751187f870bc81f94563733a154d7a670"
 dependencies = [
  "plotters-backend",
+]
+
+[[package]]
+name = "polyfuzzy"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "curve25519-dalek",
+ "rand_core",
+ "serde",
+ "sha2",
+ "subtle",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "fuzzy-message-detection",
+    "polyfuzzy",
 ]
 
 resolver = "2"

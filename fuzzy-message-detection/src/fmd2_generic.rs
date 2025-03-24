@@ -3,6 +3,7 @@
 // It uses arbitrary basepoints for  ElGamal encryption and the Chamaleon Hash.
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
+use core::hint::black_box;
 
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
@@ -143,17 +144,43 @@ pub struct DetectionKey {
 
 impl DetectionKey {
     pub(crate) fn detect(&self, flag_ciphers: &GenericFlagCiphertexts) -> bool {
-        let u = flag_ciphers.u;
-        let CiphertextBits(bit_ciphertexts) = flag_ciphers.c.decompress();
-        let m = hash_flag_ciphertexts(&u, &flag_ciphers.c);
-        let w = flag_ciphers.basepoint_ch * m + flag_ciphers.u * flag_ciphers.y;
-        let mut success = true;
-        for (xi, index) in self.subkeys.iter().zip(self.indices.iter()) {
-            let k_i = hash_to_flag_ciphertext_bit(&u, &(u * xi), &w);
-            success = success && k_i != bit_ciphertexts[*index]
+        let GenericFlagCiphertexts {
+            basepoint_ch,
+            u,
+            y,
+            c,
+        } = flag_ciphers;
+
+        let CiphertextBits(bit_ciphertexts) = c.decompress();
+
+        // the false positive rate isn't private so this
+        // can run in variable time
+        if self
+            .indices
+            .iter()
+            .copied()
+            .any(|index| index >= bit_ciphertexts.len())
+        {
+            return false;
         }
 
-        success
+        let m = hash_flag_ciphertexts(u, c);
+        let w = basepoint_ch * m + u * y;
+
+        // however, when dealing with key material, we should only
+        // perform constant time ops
+        let mut success = 1u8;
+        for (xi, index) in self.subkeys.iter().zip(self.indices.iter()) {
+            let k_i = hash_to_flag_ciphertext_bit(u, &(u * xi), &w) as u8;
+            let flag_bit = unsafe {
+                // SAFETY: we have asserted that no index within the dsk has
+                // a value greater than the length of the bit ciphertexts
+                *bit_ciphertexts.get_unchecked(*index) as u8
+            };
+            success = black_box(success & k_i ^ flag_bit);
+        }
+
+        success == 1u8
     }
 }
 
@@ -279,6 +306,25 @@ fn hash_flag_ciphertexts(
 mod tests {
     use super::*;
     use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+
+    #[test]
+    fn test_flag_detect_out_of_bounds() {
+        let mut csprng = rand_core::OsRng;
+
+        let (dk1, dk2) = {
+            let (sk, _, _) = generate_keys_and_basepoint_ch(10);
+            let dk1 = sk.extract(&(8..10).collect::<Vec<_>>()).unwrap();
+            let dk2 = sk.extract(&(1..7).collect::<Vec<_>>()).unwrap();
+            (dk1, dk2)
+        };
+
+        let (_, pk, basepoint_ch) = generate_keys_and_basepoint_ch(2);
+
+        let flag_cipher = GenericFlagCiphertexts::generate_flag(&pk, &basepoint_ch, &mut csprng);
+
+        _ = dk1.detect(&flag_cipher);
+        _ = dk2.detect(&flag_cipher);
+    }
 
     #[test]
     fn test_flag_detect() {

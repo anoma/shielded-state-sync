@@ -52,7 +52,7 @@ pub trait KeyExpansion<SK, PK, DPK>: FmdKeyGen<SK, PK> {
 /// - Key expansion and key randomization are compatible if FMD secret keys
 ///   of FMD public keys expanded from randomized compact keys are the same.
 //
-//   (sk1,pk1)----diversify----> pk2
+//   (sk1,pk1)----randomize----> pk2
 //      |                         |
 //      |                         |
 //  expand_keypair         expand_public_key

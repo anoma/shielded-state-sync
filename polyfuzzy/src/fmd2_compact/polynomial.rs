@@ -12,6 +12,7 @@ pub(crate) struct Polynomial {
 
 /// A degree t polynomial encoded in the exponent of a Ristretto point
 /// given by its t+1 points.
+#[derive(Debug, Clone)]
 pub(crate) struct EncodedPolynomial {
     pub(crate) basepoint: RistrettoPoint,
     pub(crate) coeffs: Vec<RistrettoPoint>,

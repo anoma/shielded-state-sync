@@ -45,6 +45,10 @@ pub trait KeyExpansion<SK, PK, DPK>: FmdKeyGen<SK, PK> {
     fn expand_keypair(&self, parent_sk: &SK, parent_pk: &PK) -> (FmdSecretKey, DPK);
 
     fn expand_public_key(&self, parent_pk: &PK) -> DPK;
+
+    fn encryption_key<EK>(&self, parent_sk: &SK) -> EK
+    where
+        EK: From<[u8; 32]>;
 }
 
 /// A trait to randomize public keys.

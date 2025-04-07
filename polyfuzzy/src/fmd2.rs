@@ -49,6 +49,7 @@ impl From<GenericFlagCiphertexts> for FlagCiphertexts {
 }
 
 /// The multi-key scheme.
+#[derive(Debug, Clone)]
 pub struct Fmd2MultikeyScheme {
     gamma: usize,
 }

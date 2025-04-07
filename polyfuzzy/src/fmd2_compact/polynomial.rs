@@ -67,16 +67,7 @@ impl Polynomial {
     pub(crate) fn evaluate(&self, public_scalars: &[Scalar]) -> ScalarEvaluations {
         let evaluations = public_scalars
             .iter()
-            .map(|scalar| {
-                let mut res = self.coeffs[0];
-                let mut pow = Scalar::ONE;
-                for coeff in self.coeffs.iter().skip(1) {
-                    pow *= scalar;
-                    res += coeff * pow;
-                }
-
-                res
-            })
+            .map(|scalar| evaluate_scalar(scalar, &self.coeffs))
             .collect();
 
         ScalarEvaluations {
@@ -85,20 +76,27 @@ impl Polynomial {
     }
 }
 
+fn evaluate_scalar<C>(public_scalar: &Scalar, coeffs: &[C]) -> C
+where
+    C: Clone + core::ops::AddAssign,
+    for<'coeff> &'coeff C: core::ops::Mul<Scalar, Output = C>,
+{
+    let mut res = coeffs[0].clone();
+    let mut pow = Scalar::ONE;
+
+    for coeff in &coeffs[1..] {
+        pow *= public_scalar;
+        res += coeff * pow;
+    }
+
+    res
+}
+
 impl EncodedPolynomial {
     pub(crate) fn evaluate(&self, public_scalars: &[Scalar]) -> PointEvaluations {
         let evaluations = public_scalars
             .iter()
-            .map(|scalar| {
-                let mut res = self.coeffs[0];
-                let mut pow = Scalar::ONE;
-                for coeff in self.coeffs.iter().skip(1) {
-                    pow *= scalar;
-                    res += coeff * pow;
-                }
-
-                res
-            })
+            .map(|scalar| evaluate_scalar(scalar, &self.coeffs))
             .collect();
 
         PointEvaluations {

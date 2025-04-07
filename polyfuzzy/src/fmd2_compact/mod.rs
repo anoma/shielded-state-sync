@@ -170,6 +170,22 @@ mod tests {
     use crate::{FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme};
 
     #[test]
+    fn test_unique_flag_ciphertexts_for_same_pk() {
+        let mut csprng = rand_core::OsRng;
+
+        let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
+        let (_, master_cpk) = compact_multi_fmd2.generate_keys(&mut csprng);
+
+        let flag_ciphers_1 = compact_multi_fmd2.flag(&master_cpk, &mut csprng);
+        let flag_ciphers_2 = compact_multi_fmd2.flag(&master_cpk, &mut csprng);
+
+        assert_ne!(flag_ciphers_1.0.basepoint_ch, flag_ciphers_2.0.basepoint_ch);
+        assert_ne!(flag_ciphers_1.0.u, flag_ciphers_2.0.u);
+        assert_ne!(flag_ciphers_1.0.y, flag_ciphers_2.0.y);
+        assert_ne!(flag_ciphers_1.0.c, flag_ciphers_2.0.c);
+    }
+
+    #[test]
     fn test_expand_is_correct() {
         let mut csprng = rand_core::OsRng;
 

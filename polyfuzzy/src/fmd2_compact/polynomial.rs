@@ -37,9 +37,11 @@ impl Polynomial {
         degree: usize,
         rng: &mut R,
     ) -> Polynomial {
-        let coeffs: Vec<Scalar> = (0..degree + 1).map(|_| Scalar::random(rng)).collect();
-
-        Polynomial { coeffs }
+        Polynomial {
+            coeffs: core::iter::repeat_with(|| Scalar::random(rng))
+                .take(degree + 1)
+                .collect(),
+        }
     }
 
     pub(crate) fn encode(&self, basepoint: &RistrettoPoint) -> EncodedPolynomial {

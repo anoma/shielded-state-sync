@@ -17,12 +17,8 @@ use crate::{
 pub struct CompactSecretKey(Polynomial);
 
 impl CompactSecretKey {
-    pub fn evaluate<EK>(&self, values: &[Scalar]) -> Vec<Scalar>
-    {
-        self
-            .0
-            .evaluate(values)
-            .results
+    pub fn evaluate<EK>(&self, values: &[Scalar]) -> Vec<Scalar> {
+        self.0.evaluate(values).results
     }
 }
 

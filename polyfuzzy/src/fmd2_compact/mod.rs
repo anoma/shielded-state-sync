@@ -20,6 +20,12 @@ impl CompactSecretKey {
     pub fn evaluate(&self, values: &[Scalar]) -> Vec<Scalar> {
         self.0.evaluate(values).results
     }
+
+    /// Get the public key counterpart of this key
+    /// with standard basepoint
+    pub fn public_key(&self) -> CompactPublicKey {
+        CompactPublicKey(self.0.encode(&RISTRETTO_BASEPOINT_POINT))
+    }
 }
 
 /// An encoded polynomial over Ristretto. t+2 points.

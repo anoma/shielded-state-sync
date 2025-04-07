@@ -16,6 +16,16 @@ use crate::{
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CompactSecretKey(Polynomial);
 
+impl CompactSecretKey {
+    pub fn evaluate<EK>(&self, values: &[Scalar]) -> Vec<Scalar>
+    {
+        self
+            .0
+            .evaluate(values)
+            .results
+    }
+}
+
 /// An encoded polynomial over Ristretto. t+2 points.
 /// The first point is the basepoint, the remaining
 /// t+1 points the encoded coefficients.
@@ -69,7 +79,7 @@ impl MultiFmd2CompactScheme {
     /// Public scalars default to 1,...,γ in Z_q.
     pub fn new(gamma: usize, threshold: usize) -> Self {
         let mut public_scalars = Vec::new();
-        let mut scalar = Scalar::ONE + Scalar::ONE;
+        let mut scalar = Scalar::ONE;
         for _i in 0..gamma {
             // Safely assume γ << q
             public_scalars.push(scalar);
@@ -151,21 +161,6 @@ impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd
         let encoded_evaluations = parent_pk.0.evaluate(&self.public_scalars);
 
         FmdPublicKey(encoded_evaluations)
-    }
-
-    fn encryption_key<EK>(&self, parent_sk: &CompactSecretKey) -> EK
-    where
-        EK: From<[u8; 32]>,
-    {
-        parent_sk
-            .0
-            .evaluate(&[Scalar::ONE])
-            .results
-            .into_iter()
-            .next()
-            .unwrap()
-            .to_bytes()
-            .into()
     }
 }
 

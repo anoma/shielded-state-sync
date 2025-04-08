@@ -16,6 +16,14 @@ use crate::{
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CompactSecretKey(Polynomial);
 
+impl CompactSecretKey {
+    /// Get the public key counterpart of this key
+    /// with standard basepoint
+    pub fn master_public_key(&self) -> CompactPublicKey {
+        CompactPublicKey(self.0.encode(&RISTRETTO_BASEPOINT_POINT))
+    }
+}
+
 /// An encoded polynomial over Ristretto. t+2 points.
 /// The first point is the basepoint, the remaining
 /// t+1 points the encoded coefficients.

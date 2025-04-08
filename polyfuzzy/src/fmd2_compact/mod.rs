@@ -8,7 +8,9 @@ use serde::{Deserialize, Serialize};
 
 mod polynomial;
 use crate::{
-    fmd2_generic::{ChamaleonHashBasepoint, GenericFlagCiphertexts, GenericFmdPublicKey},
+    fmd2_generic::{
+        ChamaleonHashBasepoint, CiphertextBits, GenericFlagCiphertexts, GenericFmdPublicKey,
+    },
     FmdKeyGen, FmdSecretKey, KeyExpansion, KeyRandomization, MultiFmdScheme,
 };
 
@@ -76,6 +78,8 @@ pub struct MultiFmd2CompactScheme {
     pub(crate) public_scalars: Vec<Scalar>,
     /// The randomized public key.
     randomized_pk: Option<FmdPublicKey>,
+    /// Scratch buffer used to decompress flag ciphertext bits
+    ciphertext_bits: CiphertextBits,
 }
 
 impl MultiFmd2CompactScheme {
@@ -92,6 +96,7 @@ impl MultiFmd2CompactScheme {
             threshold,
             public_scalars,
             randomized_pk: None,
+            ciphertext_bits: CiphertextBits(Vec::with_capacity(gamma)),
         }
     }
 }
@@ -146,8 +151,12 @@ impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for MultiFmd2CompactSchem
         flag
     }
 
-    fn detect(&self, detection_key: &crate::DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
-        detection_key.detect(&flag_ciphers.0)
+    fn detect(
+        &mut self,
+        detection_key: &crate::DetectionKey,
+        flag_ciphers: &FlagCiphertexts,
+    ) -> bool {
+        detection_key.detect(&mut self.ciphertext_bits, &flag_ciphers.0)
     }
 }
 

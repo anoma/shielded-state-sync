@@ -5,6 +5,7 @@ use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, RistrettoPoint, Sca
 use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 mod polynomial;
 use crate::{
@@ -22,7 +23,7 @@ impl CompactSecretKey {
     /// Get the public key counterpart of this key
     /// with standard basepoint
     pub fn master_public_key(&self) -> CompactPublicKey {
-        CompactPublicKey(self.0.encode(&RISTRETTO_BASEPOINT_POINT))
+        CompactPublicKey::from_poly(self.0.encode(&RISTRETTO_BASEPOINT_POINT))
     }
 }
 
@@ -30,13 +31,40 @@ impl CompactSecretKey {
 /// The first point is the basepoint, the remaining
 /// t+1 points the encoded coefficients.
 #[derive(Debug, Clone)]
-pub struct CompactPublicKey(EncodedPolynomial);
+pub struct CompactPublicKey {
+    #[allow(dead_code)]
+    fingerprint: [u8; 20],
+    polynomial: EncodedPolynomial,
+}
 
 impl CompactPublicKey {
     /// Compress this key by dropping its basepoint.
     pub fn compress(self) -> CompressedCompactPublicKey {
         CompressedCompactPublicKey {
-            coeffs: self.0.coeffs,
+            coeffs: self.polynomial.coeffs,
+        }
+    }
+
+    fn from_poly(polynomial: EncodedPolynomial) -> Self {
+        let fingerprint = {
+            let mut hasher = Sha256::new();
+
+            hasher.update(polynomial.basepoint.compress().0);
+
+            for coeff in polynomial.coeffs.iter() {
+                hasher.update(coeff.compress().0);
+            }
+
+            let hash: [u8; 32] = hasher.finalize().into();
+            let mut fingerprint = [0; 20];
+
+            fingerprint.copy_from_slice(&hash[..20]);
+            fingerprint
+        };
+
+        Self {
+            fingerprint,
+            polynomial,
         }
     }
 }
@@ -51,7 +79,7 @@ pub struct CompressedCompactPublicKey {
 impl CompressedCompactPublicKey {
     /// Decompress this key by deriving a new basepoint from the given tag.
     pub fn decompress(self, tag: &[u8; 64]) -> CompactPublicKey {
-        CompactPublicKey(EncodedPolynomial {
+        CompactPublicKey::from_poly(EncodedPolynomial {
             basepoint: RistrettoPoint::from_uniform_bytes(tag),
             coeffs: self.coeffs,
         })
@@ -115,7 +143,7 @@ impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
 
         (
             CompactSecretKey(secret_polynomial),
-            CompactPublicKey(encoded_polynomial),
+            CompactPublicKey::from_poly(encoded_polynomial),
         )
     }
 }
@@ -167,7 +195,7 @@ impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd
         parent_pk: &CompactPublicKey,
     ) -> (FmdSecretKey, FmdPublicKey) {
         let evaluations = parent_sk.0.evaluate(&self.public_scalars);
-        let encoded_evaluations = evaluations.encode(&parent_pk.0.basepoint);
+        let encoded_evaluations = evaluations.encode(&parent_pk.polynomial.basepoint);
 
         (
             FmdSecretKey(evaluations.results),
@@ -176,7 +204,7 @@ impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd
     }
 
     fn expand_public_key(&self, parent_pk: &CompactPublicKey) -> FmdPublicKey {
-        let encoded_evaluations = parent_pk.0.evaluate(&self.public_scalars);
+        let encoded_evaluations = parent_pk.polynomial.evaluate(&self.public_scalars);
 
         FmdPublicKey(encoded_evaluations)
     }
@@ -186,7 +214,7 @@ impl KeyRandomization<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactSc
     fn randomize(&self, sk: &CompactSecretKey, tag: &[u8; 64]) -> CompactPublicKey {
         let encoded_polynomial = sk.0.encode_with_hashed_basepoint(tag);
 
-        CompactPublicKey(encoded_polynomial)
+        CompactPublicKey::from_poly(encoded_polynomial)
     }
 }
 

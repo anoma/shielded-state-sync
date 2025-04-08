@@ -19,7 +19,7 @@ pub struct CompactSecretKey(Polynomial);
 impl CompactSecretKey {
     /// Get the public key counterpart of this key
     /// with standard basepoint
-    pub fn public_key(&self) -> CompactPublicKey {
+    pub fn master_public_key(&self) -> CompactPublicKey {
         CompactPublicKey(self.0.encode(&RISTRETTO_BASEPOINT_POINT))
     }
 }

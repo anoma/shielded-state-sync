@@ -19,28 +19,31 @@ pub struct CompactSecretKey(Polynomial);
 /// An encoded polynomial over Ristretto. t+2 points.
 /// The first point is the basepoint, the remaining
 /// t+1 points the encoded coefficients.
+#[derive(Debug, Clone)]
 pub struct CompactPublicKey(EncodedPolynomial);
 
 impl CompactPublicKey {
     /// Compress this key by dropping its basepoint.
-    pub fn compress(&self) -> CompressedCompactPublicKey {
+    pub fn compress(self) -> CompressedCompactPublicKey {
         CompressedCompactPublicKey {
-            coeffs: self.0.coeffs.clone(),
+            coeffs: self.0.coeffs,
         }
     }
 }
 
 /// A compressed representation that drops the basepoint.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct CompressedCompactPublicKey {
     coeffs: Vec<RistrettoPoint>,
 }
 
 impl CompressedCompactPublicKey {
-    pub fn decompress(&self, tag: &[u8; 64]) -> CompactPublicKey {
+    /// Decompress this key by deriving a new basepoint from the given tag.
+    pub fn decompress(self, tag: &[u8; 64]) -> CompactPublicKey {
         CompactPublicKey(EncodedPolynomial {
             basepoint: RistrettoPoint::from_uniform_bytes(tag),
-            coeffs: self.coeffs.clone(),
+            coeffs: self.coeffs,
         })
     }
 }
@@ -53,9 +56,11 @@ pub struct FmdPublicKey(PointEvaluations);
 /// The basepoint for the chamaleon hash,
 /// and `u`, `y`, `c`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
 pub struct FlagCiphertexts(GenericFlagCiphertexts);
 
 /// The multi-key FMD scheme supporting key expansion and key randomization.
+#[derive(Debug, Clone)]
 pub struct MultiFmd2CompactScheme {
     /// The threshold parameter
     threshold: usize,

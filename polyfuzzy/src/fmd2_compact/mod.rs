@@ -121,23 +121,29 @@ impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for MultiFmd2CompactSchem
         public_key: &CompactPublicKey,
         rng: &mut R,
     ) -> FlagCiphertexts {
-        if self.randomized_pk.is_none() {
-            // Just derive on first call.
-            let derived_pk = self.expand_public_key(public_key);
-            self.randomized_pk = Some(derived_pk);
-        }
+        // Take the randomized pk to avoid getting yelled at
+        // by the borrow checker
+        let mut randomized_pk = self.randomized_pk.take();
+
+        let randomized_pk_ref =
+            randomized_pk.get_or_insert_with(|| self.expand_public_key(public_key));
 
         let gpk = GenericFmdPublicKey {
-            basepoint_eg: self.randomized_pk.clone().unwrap().0.basepoint,
-            keys: self.randomized_pk.clone().unwrap().0.results.clone(),
+            basepoint_eg: randomized_pk_ref.0.basepoint,
+            keys: randomized_pk_ref.0.results.clone(),
         };
         let trapdoor = Scalar::random(rng);
 
-        FlagCiphertexts(GenericFlagCiphertexts::generate_flag(
+        let flag = FlagCiphertexts(GenericFlagCiphertexts::generate_flag(
             &gpk,
             &ChamaleonHashBasepoint::new(&gpk, &trapdoor),
             rng,
-        ))
+        ));
+
+        // Restore the randomized pk
+        self.randomized_pk = randomized_pk;
+
+        flag
     }
 
     fn detect(&self, detection_key: &crate::DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {

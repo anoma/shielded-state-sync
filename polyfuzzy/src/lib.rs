@@ -30,7 +30,7 @@ pub trait MultiFmdScheme<PK, F> {
     }
 
     /// Probabilistic detection based on the false-positive rate associated to `detection_key`.
-    fn detect(&self, detection_key: &DetectionKey, flag_ciphers: &F) -> bool;
+    fn detect(&mut self, detection_key: &DetectionKey, flag_ciphers: &F) -> bool;
 }
 
 /// A trait to generate the keypair of the FMD scheme.

@@ -10,7 +10,9 @@ use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    fmd2_generic::{ChamaleonHashBasepoint, GenericFlagCiphertexts, GenericFmdPublicKey},
+    fmd2_generic::{
+        ChamaleonHashBasepoint, CiphertextBits, GenericFlagCiphertexts, GenericFmdPublicKey,
+    },
     DetectionKey, FmdKeyGen, FmdSecretKey, MultiFmdScheme,
 };
 
@@ -95,7 +97,7 @@ impl MultiFmdScheme<FmdPublicKey, FlagCiphertexts> for Fmd2MultikeyScheme {
         GenericFlagCiphertexts::generate_flag(&gpk, &ChamaleonHashBasepoint::default(), rng).into()
     }
 
-    fn detect(&self, detection_key: &DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
+    fn detect(&mut self, detection_key: &DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
         let gfc = GenericFlagCiphertexts::new(
             &RISTRETTO_BASEPOINT_POINT,
             &flag_ciphers.u,
@@ -103,6 +105,6 @@ impl MultiFmdScheme<FmdPublicKey, FlagCiphertexts> for Fmd2MultikeyScheme {
             &flag_ciphers.c,
         );
 
-        detection_key.detect(&gfc)
+        detection_key.detect(&mut CiphertextBits::new(), &gfc)
     }
 }

@@ -1,14 +1,20 @@
 //! A multi-key FMD scheme with key expansion and key randomization.
+
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, RistrettoPoint, Scalar};
 use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 mod polynomial;
 use crate::{
-    fmd2_generic::{ChamaleonHashBasepoint, GenericFlagCiphertexts, GenericFmdPublicKey},
+    fmd2_generic::{
+        ChamaleonHashBasepoint, CiphertextBits, GenericFlagCiphertexts, GenericFmdPublicKey,
+    },
     FmdKeyGen, FmdSecretKey, KeyExpansion, KeyRandomization, MultiFmdScheme,
 };
 
@@ -20,7 +26,7 @@ impl CompactSecretKey {
     /// Get the public key counterpart of this key
     /// with standard basepoint
     pub fn master_public_key(&self) -> CompactPublicKey {
-        CompactPublicKey(self.0.encode(&RISTRETTO_BASEPOINT_POINT))
+        CompactPublicKey::from_poly(self.0.encode(&RISTRETTO_BASEPOINT_POINT))
     }
 }
 
@@ -28,13 +34,39 @@ impl CompactSecretKey {
 /// The first point is the basepoint, the remaining
 /// t+1 points the encoded coefficients.
 #[derive(Debug, Clone)]
-pub struct CompactPublicKey(EncodedPolynomial);
+pub struct CompactPublicKey {
+    fingerprint: [u8; 20],
+    polynomial: EncodedPolynomial,
+}
 
 impl CompactPublicKey {
     /// Compress this key by dropping its basepoint.
     pub fn compress(self) -> CompressedCompactPublicKey {
         CompressedCompactPublicKey {
-            coeffs: self.0.coeffs,
+            coeffs: self.polynomial.coeffs,
+        }
+    }
+
+    fn from_poly(polynomial: EncodedPolynomial) -> Self {
+        let fingerprint = {
+            let mut hasher = Sha256::new();
+
+            hasher.update(polynomial.basepoint.compress().0);
+
+            for coeff in polynomial.coeffs.iter() {
+                hasher.update(coeff.compress().0);
+            }
+
+            let hash: [u8; 32] = hasher.finalize().into();
+            let mut fingerprint = [0; 20];
+
+            fingerprint.copy_from_slice(&hash[..20]);
+            fingerprint
+        };
+
+        Self {
+            fingerprint,
+            polynomial,
         }
     }
 }
@@ -49,7 +81,7 @@ pub struct CompressedCompactPublicKey {
 impl CompressedCompactPublicKey {
     /// Decompress this key by deriving a new basepoint from the given tag.
     pub fn decompress(self, tag: &[u8; 64]) -> CompactPublicKey {
-        CompactPublicKey(EncodedPolynomial {
+        CompactPublicKey::from_poly(EncodedPolynomial {
             basepoint: RistrettoPoint::from_uniform_bytes(tag),
             coeffs: self.coeffs,
         })
@@ -67,6 +99,32 @@ pub struct FmdPublicKey(PointEvaluations);
 #[derive(Debug, Clone)]
 pub struct FlagCiphertexts(GenericFlagCiphertexts);
 
+/// Cache of expanded FMD public keys.
+#[derive(Debug, Clone)]
+struct ExpandedKeyCache {
+    /// Fingerprint of the [`CompactPublicKey`].
+    fingerprint: [u8; 20],
+    /// The expanded public key.
+    randomized_key: FmdPublicKey,
+}
+
+impl ExpandedKeyCache {
+    fn new(scheme: &MultiFmd2CompactScheme, pk: &CompactPublicKey) -> Self {
+        Self {
+            fingerprint: pk.fingerprint,
+            randomized_key: scheme.expand_public_key(pk),
+        }
+    }
+
+    fn or_update(&mut self, scheme: &MultiFmd2CompactScheme, pk: &CompactPublicKey) -> &mut Self {
+        if self.fingerprint.ct_ne(&pk.fingerprint).into() {
+            self.fingerprint = pk.fingerprint;
+            self.randomized_key = scheme.expand_public_key(pk);
+        }
+        self
+    }
+}
+
 /// The multi-key FMD scheme supporting key expansion and key randomization.
 #[derive(Debug, Clone)]
 pub struct MultiFmd2CompactScheme {
@@ -74,8 +132,10 @@ pub struct MultiFmd2CompactScheme {
     threshold: usize,
     ///the γ public scalars to derive keys from.
     pub(crate) public_scalars: Vec<Scalar>,
-    /// The randomized public key.
-    randomized_pk: Option<FmdPublicKey>,
+    /// Expanded key cache.
+    expanded_pk: Option<Box<ExpandedKeyCache>>,
+    /// Scratch buffer used to decompress flag ciphertext bits
+    ciphertext_bits: CiphertextBits,
 }
 
 impl MultiFmd2CompactScheme {
@@ -91,7 +151,8 @@ impl MultiFmd2CompactScheme {
         MultiFmd2CompactScheme {
             threshold,
             public_scalars,
-            randomized_pk: None,
+            expanded_pk: None,
+            ciphertext_bits: CiphertextBits(Vec::with_capacity(gamma)),
         }
     }
 }
@@ -110,7 +171,7 @@ impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
 
         (
             CompactSecretKey(secret_polynomial),
-            CompactPublicKey(encoded_polynomial),
+            CompactPublicKey::from_poly(encoded_polynomial),
         )
     }
 }
@@ -121,27 +182,38 @@ impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for MultiFmd2CompactSchem
         public_key: &CompactPublicKey,
         rng: &mut R,
     ) -> FlagCiphertexts {
-        if self.randomized_pk.is_none() {
-            // Just derive on first call.
-            let derived_pk = self.expand_public_key(public_key);
-            self.randomized_pk = Some(derived_pk);
-        }
+        // Take the randomized pk to avoid getting yelled at
+        // by the borrow checker
+        let mut expanded_pk = self.expanded_pk.take();
+
+        let expanded_pk_ref = expanded_pk
+            .get_or_insert_with(|| Box::new(ExpandedKeyCache::new(self, public_key)))
+            .or_update(self, public_key);
 
         let gpk = GenericFmdPublicKey {
-            basepoint_eg: self.randomized_pk.clone().unwrap().0.basepoint,
-            keys: self.randomized_pk.clone().unwrap().0.results.clone(),
+            basepoint_eg: expanded_pk_ref.randomized_key.0.basepoint,
+            keys: expanded_pk_ref.randomized_key.0.results.clone(),
         };
         let trapdoor = Scalar::random(rng);
 
-        FlagCiphertexts(GenericFlagCiphertexts::generate_flag(
+        let flag = FlagCiphertexts(GenericFlagCiphertexts::generate_flag(
             &gpk,
             &ChamaleonHashBasepoint::new(&gpk, &trapdoor),
             rng,
-        ))
+        ));
+
+        // Restore the randomized pk
+        self.expanded_pk = expanded_pk;
+
+        flag
     }
 
-    fn detect(&self, detection_key: &crate::DetectionKey, flag_ciphers: &FlagCiphertexts) -> bool {
-        detection_key.detect(&flag_ciphers.0)
+    fn detect(
+        &mut self,
+        detection_key: &crate::DetectionKey,
+        flag_ciphers: &FlagCiphertexts,
+    ) -> bool {
+        detection_key.detect(&mut self.ciphertext_bits, &flag_ciphers.0)
     }
 }
 
@@ -152,7 +224,7 @@ impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd
         parent_pk: &CompactPublicKey,
     ) -> (FmdSecretKey, FmdPublicKey) {
         let evaluations = parent_sk.0.evaluate(&self.public_scalars);
-        let encoded_evaluations = evaluations.encode(&parent_pk.0.basepoint);
+        let encoded_evaluations = evaluations.encode(&parent_pk.polynomial.basepoint);
 
         (
             FmdSecretKey(evaluations.results),
@@ -161,7 +233,7 @@ impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd
     }
 
     fn expand_public_key(&self, parent_pk: &CompactPublicKey) -> FmdPublicKey {
-        let encoded_evaluations = parent_pk.0.evaluate(&self.public_scalars);
+        let encoded_evaluations = parent_pk.polynomial.evaluate(&self.public_scalars);
 
         FmdPublicKey(encoded_evaluations)
     }
@@ -171,7 +243,7 @@ impl KeyRandomization<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactSc
     fn randomize(&self, sk: &CompactSecretKey, tag: &[u8; 64]) -> CompactPublicKey {
         let encoded_polynomial = sk.0.encode_with_hashed_basepoint(tag);
 
-        CompactPublicKey(encoded_polynomial)
+        CompactPublicKey::from_poly(encoded_polynomial)
     }
 }
 
@@ -181,6 +253,35 @@ mod tests {
 
     use super::{polynomial::encode_coefficients, MultiFmd2CompactScheme};
     use crate::{FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme};
+
+    #[test]
+    fn test_flagging_with_different_pks_flushes_cache() {
+        let mut csprng = rand_core::OsRng;
+
+        let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
+
+        let (_, master_cpk_1) = compact_multi_fmd2.generate_keys(&mut csprng);
+        let (_, master_cpk_2) = compact_multi_fmd2.generate_keys(&mut csprng);
+        assert_ne!(master_cpk_1.fingerprint, master_cpk_2.fingerprint);
+
+        _ = compact_multi_fmd2.flag(&master_cpk_1, &mut csprng);
+        assert_eq!(
+            compact_multi_fmd2.expanded_pk.as_ref().unwrap().fingerprint,
+            master_cpk_1.fingerprint
+        );
+
+        _ = compact_multi_fmd2.flag(&master_cpk_2, &mut csprng);
+        assert_eq!(
+            compact_multi_fmd2.expanded_pk.as_ref().unwrap().fingerprint,
+            master_cpk_2.fingerprint
+        );
+
+        _ = compact_multi_fmd2.flag(&master_cpk_1, &mut csprng);
+        assert_eq!(
+            compact_multi_fmd2.expanded_pk.as_ref().unwrap().fingerprint,
+            master_cpk_1.fingerprint
+        );
+    }
 
     #[test]
     fn test_unique_flag_ciphertexts_for_same_pk() {
@@ -225,7 +326,7 @@ mod tests {
 
         // Expand directly from master.
         let (fmd_sk, _) = compact_multi_fmd2.expand_keypair(&master_csk, &master_cpk);
-        let fmd_pk_from_master = encode_coefficients(&fmd_sk.0, &rand_cpk.0.basepoint);
+        let fmd_pk_from_master = encode_coefficients(&fmd_sk.0, &rand_cpk.polynomial.basepoint);
 
         assert_eq!(fmd_pk.0.results, fmd_pk_from_master);
     }

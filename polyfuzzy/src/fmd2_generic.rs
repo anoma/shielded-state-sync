@@ -19,15 +19,14 @@ use sha2::{Digest, Sha256, Sha512};
 pub(crate) struct CompressedCiphertextBits(pub(crate) Vec<u8>);
 
 impl CompressedCiphertextBits {
-    fn decompress(&self) -> CiphertextBits {
-        let mut bit_ciphertexts = Vec::with_capacity(self.0.len() * 8);
+    fn decompress_into(&self, CiphertextBits(bit_ciphertexts): &mut CiphertextBits) {
+        bit_ciphertexts.clear();
+
         for byte in self.0.iter() {
             for i in 0..8 {
                 bit_ciphertexts.push(1u8 == (byte >> i) & 1u8);
             }
         }
-
-        CiphertextBits(bit_ciphertexts)
     }
 }
 
@@ -37,6 +36,10 @@ impl CompressedCiphertextBits {
 pub(crate) struct CiphertextBits(pub(crate) Vec<bool>);
 
 impl CiphertextBits {
+    pub(crate) const fn new() -> CiphertextBits {
+        Self(Vec::new())
+    }
+
     fn compress(&self) -> CompressedCiphertextBits {
         CompressedCiphertextBits(
             self.0
@@ -143,7 +146,11 @@ pub struct DetectionKey {
 }
 
 impl DetectionKey {
-    pub(crate) fn detect(&self, flag_ciphers: &GenericFlagCiphertexts) -> bool {
+    pub(crate) fn detect(
+        &self,
+        bit_ciphertexts: &mut CiphertextBits,
+        flag_ciphers: &GenericFlagCiphertexts,
+    ) -> bool {
         let GenericFlagCiphertexts {
             basepoint_ch,
             u,
@@ -151,7 +158,9 @@ impl DetectionKey {
             c,
         } = flag_ciphers;
 
-        let CiphertextBits(bit_ciphertexts) = c.decompress();
+        c.decompress_into(bit_ciphertexts);
+
+        let CiphertextBits(bit_ciphertexts) = bit_ciphertexts;
 
         // the false positive rate isn't private so this
         // can run in variable time
@@ -322,8 +331,8 @@ mod tests {
 
         let flag_cipher = GenericFlagCiphertexts::generate_flag(&pk, &basepoint_ch, &mut csprng);
 
-        _ = dk1.detect(&flag_cipher);
-        _ = dk2.detect(&flag_cipher);
+        _ = dk1.detect(&mut CiphertextBits::new(), &flag_cipher);
+        _ = dk2.detect(&mut CiphertextBits::new(), &flag_cipher);
     }
 
     #[test]
@@ -336,7 +345,7 @@ mod tests {
 
         let flag_cipher = GenericFlagCiphertexts::generate_flag(&pk, &basepoint_ch, &mut csprng);
         let dk = sk.extract(&(0..gamma).collect::<Vec<_>>()).unwrap();
-        assert!(dk.detect(&flag_cipher));
+        assert!(dk.detect(&mut CiphertextBits::new(), &flag_cipher));
     }
 
     // Test that we perform checks on the input indices when extract flags.
@@ -411,7 +420,7 @@ mod tests {
             let flag_cipher =
                 GenericFlagCiphertexts::generate_flag(&pk, &basepoint_ch, &mut csprng);
             let dk = sk.extract(&[0, 2, 4]).unwrap();
-            assert!(dk.detect(&flag_cipher));
+            assert!(dk.detect(&mut CiphertextBits::new(), &flag_cipher));
         }
     }
 

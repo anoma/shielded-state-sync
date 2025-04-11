@@ -255,6 +255,35 @@ mod tests {
     use crate::{FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme};
 
     #[test]
+    fn test_flagging_with_different_pks_flushes_cache() {
+        let mut csprng = rand_core::OsRng;
+
+        let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
+
+        let (_, master_cpk_1) = compact_multi_fmd2.generate_keys(&mut csprng);
+        let (_, master_cpk_2) = compact_multi_fmd2.generate_keys(&mut csprng);
+        assert_ne!(master_cpk_1.fingerprint, master_cpk_2.fingerprint);
+
+        _ = compact_multi_fmd2.flag(&master_cpk_1, &mut csprng);
+        assert_eq!(
+            compact_multi_fmd2.expanded_pk.as_ref().unwrap().fingerprint,
+            master_cpk_1.fingerprint
+        );
+
+        _ = compact_multi_fmd2.flag(&master_cpk_2, &mut csprng);
+        assert_eq!(
+            compact_multi_fmd2.expanded_pk.as_ref().unwrap().fingerprint,
+            master_cpk_2.fingerprint
+        );
+
+        _ = compact_multi_fmd2.flag(&master_cpk_1, &mut csprng);
+        assert_eq!(
+            compact_multi_fmd2.expanded_pk.as_ref().unwrap().fingerprint,
+            master_cpk_1.fingerprint
+        );
+    }
+
+    #[test]
     fn test_unique_flag_ciphertexts_for_same_pk() {
         let mut csprng = rand_core::OsRng;
 

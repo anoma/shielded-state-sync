@@ -1,4 +1,6 @@
 //! A multi-key FMD scheme with key expansion and key randomization.
+
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, RistrettoPoint, Scalar};
@@ -6,6 +8,7 @@ use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 mod polynomial;
 use crate::{
@@ -32,7 +35,6 @@ impl CompactSecretKey {
 /// t+1 points the encoded coefficients.
 #[derive(Debug, Clone)]
 pub struct CompactPublicKey {
-    #[allow(dead_code)]
     fingerprint: [u8; 20],
     polynomial: EncodedPolynomial,
 }
@@ -97,6 +99,32 @@ pub struct FmdPublicKey(PointEvaluations);
 #[derive(Debug, Clone)]
 pub struct FlagCiphertexts(GenericFlagCiphertexts);
 
+/// Cache of expanded FMD public keys.
+#[derive(Debug, Clone)]
+struct ExpandedKeyCache {
+    /// Fingerprint of the [`CompactPublicKey`].
+    fingerprint: [u8; 20],
+    /// The expanded public key.
+    randomized_key: FmdPublicKey,
+}
+
+impl ExpandedKeyCache {
+    fn new(scheme: &MultiFmd2CompactScheme, pk: &CompactPublicKey) -> Self {
+        Self {
+            fingerprint: pk.fingerprint,
+            randomized_key: scheme.expand_public_key(pk),
+        }
+    }
+
+    fn or_update(&mut self, scheme: &MultiFmd2CompactScheme, pk: &CompactPublicKey) -> &mut Self {
+        if self.fingerprint.ct_ne(&pk.fingerprint).into() {
+            self.fingerprint = pk.fingerprint;
+            self.randomized_key = scheme.expand_public_key(pk);
+        }
+        self
+    }
+}
+
 /// The multi-key FMD scheme supporting key expansion and key randomization.
 #[derive(Debug, Clone)]
 pub struct MultiFmd2CompactScheme {
@@ -104,8 +132,8 @@ pub struct MultiFmd2CompactScheme {
     threshold: usize,
     ///the γ public scalars to derive keys from.
     pub(crate) public_scalars: Vec<Scalar>,
-    /// The randomized public key.
-    randomized_pk: Option<FmdPublicKey>,
+    /// Expanded key cache.
+    expanded_pk: Option<Box<ExpandedKeyCache>>,
     /// Scratch buffer used to decompress flag ciphertext bits
     ciphertext_bits: CiphertextBits,
 }
@@ -123,7 +151,7 @@ impl MultiFmd2CompactScheme {
         MultiFmd2CompactScheme {
             threshold,
             public_scalars,
-            randomized_pk: None,
+            expanded_pk: None,
             ciphertext_bits: CiphertextBits(Vec::with_capacity(gamma)),
         }
     }
@@ -156,14 +184,15 @@ impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for MultiFmd2CompactSchem
     ) -> FlagCiphertexts {
         // Take the randomized pk to avoid getting yelled at
         // by the borrow checker
-        let mut randomized_pk = self.randomized_pk.take();
+        let mut expanded_pk = self.expanded_pk.take();
 
-        let randomized_pk_ref =
-            randomized_pk.get_or_insert_with(|| self.expand_public_key(public_key));
+        let expanded_pk_ref = expanded_pk
+            .get_or_insert_with(|| Box::new(ExpandedKeyCache::new(self, public_key)))
+            .or_update(self, public_key);
 
         let gpk = GenericFmdPublicKey {
-            basepoint_eg: randomized_pk_ref.0.basepoint,
-            keys: randomized_pk_ref.0.results.clone(),
+            basepoint_eg: expanded_pk_ref.randomized_key.0.basepoint,
+            keys: expanded_pk_ref.randomized_key.0.results.clone(),
         };
         let trapdoor = Scalar::random(rng);
 
@@ -174,7 +203,7 @@ impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for MultiFmd2CompactSchem
         ));
 
         // Restore the randomized pk
-        self.randomized_pk = randomized_pk;
+        self.expanded_pk = expanded_pk;
 
         flag
     }
@@ -268,7 +297,7 @@ mod tests {
 
         // Expand directly from master.
         let (fmd_sk, _) = compact_multi_fmd2.expand_keypair(&master_csk, &master_cpk);
-        let fmd_pk_from_master = encode_coefficients(&fmd_sk.0, &rand_cpk.0.basepoint);
+        let fmd_pk_from_master = encode_coefficients(&fmd_sk.0, &rand_cpk.polynomial.basepoint);
 
         assert_eq!(fmd_pk.0.results, fmd_pk_from_master);
     }

@@ -40,6 +40,14 @@ pub struct FlagCiphertexts {
     c: Vec<u8>,
 }
 
+impl FlagCiphertexts {
+    /// Return the bits of the flag ciphertext.
+    #[inline]
+    pub fn bits(&self) -> &[u8] {
+        &self.c
+    }
+}
+
 impl From<GenericFlagCiphertexts> for FlagCiphertexts {
     fn from(value: GenericFlagCiphertexts) -> Self {
         FlagCiphertexts {

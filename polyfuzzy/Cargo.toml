@@ -5,7 +5,7 @@ description = "Fuzzy message detection with randomized and compact keys"
 license = "MIT"
 homepage = "https://github.com/anoma/shielded-state-sync"
 repository = "https://github.com/anoma/shielded-state-sync"
-readme = "https://github.com/anoma/shielded-state-sync/blob/main/README.md"
+readme = "../README.md"
 edition = "2021"
 
 [features]

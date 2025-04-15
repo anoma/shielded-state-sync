@@ -99,6 +99,14 @@ pub struct FmdPublicKey(PointEvaluations);
 #[derive(Debug, Clone)]
 pub struct FlagCiphertexts(GenericFlagCiphertexts);
 
+impl FlagCiphertexts {
+    /// Return the bits of the flag ciphertext.
+    #[inline]
+    pub fn bits(&self) -> &[u8] {
+        &self.0.c.0
+    }
+}
+
 /// Cache of expanded FMD public keys.
 #[derive(Debug, Clone)]
 struct ExpandedKeyCache {

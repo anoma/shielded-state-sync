@@ -5,67 +5,54 @@ extern crate alloc;
 use alloc::vec::Vec;
 use rand_core::{CryptoRng, RngCore};
 
-pub(crate) mod combiner;
-pub mod fmd2;
-pub mod fmd2_compact;
-pub(crate) mod fmd2_generic;
-pub use crate::combiner::FilterCombiner;
-pub use crate::fmd2_generic::{DetectionKey, FmdSecretKey};
+#[cfg(feature = "combine")]
+pub mod combiner;
+pub mod config;
+pub mod multifmd2;
+pub mod polyfuzzy;
+pub(crate) mod structs;
 
-/// A trait for a Fuzzy Message Detection (FMD) scheme with multi-key extraction.
-pub trait MultiFmdScheme<PK, F> {
-    fn flag<R: RngCore + CryptoRng>(&mut self, public_key: &PK, rng: &mut R) -> F;
+// Re-exports.
+pub use multifmd2::MultiFmd2;
+pub use polyfuzzy::Polyfuzzy;
+pub use structs::CompactPublicKey;
+pub use structs::CompactSecretKey;
+pub use structs::DetectionKey;
+pub use structs::ExpandedPublicKey;
+pub use structs::ExpandedSecretKey;
+pub use structs::Flag;
+pub use structs::RateFunction;
 
-    /// Returns `None` if (`leaked_rate`,`filtering_rate`) does not constitute a
-    /// valid pair of rates for the given `num_detection_keys` and `threshold`.
-    fn multi_extract(
+/// A trait for multi-key Fuzzy Message Detection (multiFMD).
+pub trait MultiKeyFmd {
+    type SecretKey;
+    type PublicKey;
+    type DetectionKey;
+    type RateFunction;
+    type Flag;
+    type TestResult;
+
+    fn generate_secret_key<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Self::SecretKey;
+
+    fn generate_public_key(&self, sk: &Self::SecretKey, address_tag: &[u8; 64]) -> Self::PublicKey;
+
+    fn extract(
         &self,
-        secret_key: &FmdSecretKey,
-        num_detection_keys: usize,
-        threshold: usize,
-        leaked_rate: usize,
-        filtering_rate: usize,
-    ) -> Option<Vec<DetectionKey>> {
-        secret_key.multi_extract(num_detection_keys, threshold, leaked_rate, filtering_rate)
-    }
+        sk: &Self::SecretKey,
+        rate: &Self::RateFunction,
+    ) -> Option<Vec<Self::DetectionKey>>;
 
-    /// Probabilistic detection based on the false-positive rate associated to `detection_key`.
-    fn detect(&mut self, detection_key: &DetectionKey, flag_ciphers: &F) -> bool;
+    fn flag<R: RngCore + CryptoRng>(&mut self, pk: &Self::PublicKey, rng: &mut R) -> Self::Flag;
+
+    fn detect(
+        &mut self,
+        detection_keys: &[Self::DetectionKey],
+        flag: &Self::Flag,
+    ) -> Option<Self::TestResult>;
 }
 
-/// A trait to generate the keypair of the FMD scheme.
-///
-/// Depending on implementations, the generated keypair can be compact.
-pub trait FmdKeyGen<SK, PK> {
-    fn generate_keys<R: RngCore + CryptoRng>(&self, rng: &mut R) -> (SK, PK);
-}
-
-/// A trait to derive an FMD keypair ([FmdSecretKey],DPK) from a keypair (SK,PK).
-pub trait KeyExpansion<SK, PK, DPK>: FmdKeyGen<SK, PK> {
-    fn expand_keypair(&self, parent_sk: &SK, parent_pk: &PK) -> (FmdSecretKey, DPK);
-
-    fn expand_public_key(&self, parent_pk: &PK) -> DPK;
-}
-
-/// A trait to randomize public keys.
-///
-/// - Key expansion and key randomization are compatible if FMD secret keys
-///   of FMD public keys expanded from randomized compact keys are the same.
-//
-//   (sk1,pk1)----randomize----> pk2
-//      |                         |
-//      |                         |
-//  expand_keypair         expand_public_key
-//      |                         |
-//      |                         |
-//      \/                        \/
-//  (sk3,pk3)                    pk4 such that sk3 = secret_key(pk4)
-///
-/// - Key randomization must be unlinkable: it is not possible to tell whether any two public keys
-///   were randomized from the same input keypair.
-pub trait KeyRandomization<SK, PK> {
-    /// The randomized public key is bound to the tag. Different tags yield
-    /// different randomized public keys.
-    /// The input tag _should_ be uniform (e.g. a hash digest).
-    fn randomize(&self, sk: &SK, tag: &[u8; 64]) -> PK;
+/// A trait to initialize a [MultiKeyFmd] scheme.
+pub trait Init {
+    /// Initialization based on the threat model and number of detection servers.
+    fn init(model: config::ThreatModel, num_servers: config::NumDetectionServers) -> Self;
 }

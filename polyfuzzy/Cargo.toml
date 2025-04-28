@@ -1,7 +1,7 @@
 [package]
 name = "polyfuzzy"
 version = "0.1.0"
-description = "Fuzzy message detection with randomized and compact keys"
+description = "Multi-key fuzzy message detection"
 license = "MIT"
 homepage = "https://github.com/anoma/shielded-state-sync"
 repository = "https://github.com/anoma/shielded-state-sync"
@@ -11,13 +11,17 @@ edition = "2021"
 [features]
 serde = ["dep:serde", "curve25519-dalek/serde"]
 sha2-force-soft = ["sha2/force-soft"]
+combine = []
 
 [dependencies]
-curve25519-dalek = { workspace = true, features = ["rand_core"] }
+curve25519-dalek = { workspace = true, features = ["rand_core", "alloc"] }
 rand_core = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"], optional = true }
 sha2 = { workspace = true }
 subtle = { workspace = true }
+strum = "0.27.2"
+strum_macros = "0.27"
+
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -26,3 +30,8 @@ rand_core = { workspace = true, features = ["getrandom"] }
 [[bench]]
 name = "benchmark"
 harness = false
+required-features = ["combine"]
+
+[[example]]
+name = "basic"
+required-features = ["combine"]

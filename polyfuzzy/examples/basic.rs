@@ -1,94 +1,140 @@
-// Run with `cargo run --example basic`
+// Run with `cargo run --release --features combine --example basic`
 
-use polyfuzzy::{fmd2::Fmd2MultikeyScheme, FilterCombiner, FmdKeyGen, MultiFmdScheme};
+use std::collections::HashMap;
+
+use polyfuzzy::config::{
+    get_safe_parameters, NumDetectionServers, SafeRateFunction, ThreatModel, GAMMA,
+};
+use sha2::{Digest, Sha512};
+
+use polyfuzzy::{Init, MultiFmd2, MultiKeyFmd};
+
+use polyfuzzy::combiner::CombineTests;
 
 fn main() {
     let mut csprng = rand_core::OsRng;
 
-    // Params
-    let gamma = 12; // Gamma parameter from FMD2.
-    let d = 3; // #{detection keys}
-    let t = 2; // corruption threshold
-    let n = t; // leaked_rate = 2^{-n}
-    let delta = n + (d - t) * n / t; // filtering_rate = 2^{-delta}
-
-    // Basic multi-key FMD scheme
-    let mut multi_fmd2 = Fmd2MultikeyScheme::new(gamma);
+    // The system configuration is given by the threat model and the total number of servers.
+    let model = ThreatModel::DishonestMajority;
+    let num_servers = NumDetectionServers::Three;
 
     println!("\nGLOBAL PARAMETERS");
     println!("-----------------");
-    println!("gamma parameter: {:?}", gamma);
+    println!("gamma parameter: {:?}", GAMMA);
+    let (t, d) = get_safe_parameters(model.clone(), num_servers.clone());
     println!("#{{detection servers}}: {:?}", d);
     println!(
         "threshold: {:?} (i.e. assuming {:?} out of the {:?} servers are corrupt)",
         t, t, d
     );
 
+    // Safe initialization.
+    let mut multifmd2 = MultiFmd2::init(model.clone(), num_servers.clone());
+
     println!("\nWORKFLOW");
     println!("--------");
     println!("[Receiver side]");
+    println!("\tGenerating a secret FMD key...",);
+    let fmd_sk = multifmd2.generate_secret_key(&mut csprng);
+
+    println!("\tDeriving a stealth public FMD key for a publicly known address tag...");
+    // Use a random-looking public tag to hash into basepoints.
+    let mut hasher = Sha512::new();
+    hasher.update(b"my_publicly_known_tag");
+    let tag_bytes: [u8; 64] = hasher.finalize().into();
+    let fmd_pk = multifmd2.generate_public_key(&fmd_sk, &tag_bytes);
+
     println!(
-        "\tReceiver parameters: leaked rate = {:?}, filtering rate = {:?}",
+        "\tExtracting {:?} detection keys (one per server)...",
+        num_servers.clone()
+    );
+    let detection_keys = multifmd2
+        .extract(&fmd_sk, &SafeRateFunction::Six.into())
+        .unwrap();
+
+    let (n, delta) = SafeRateFunction::Six.filtering_rates(model, num_servers.clone());
+    println!(
+        "\tReceiver parameters: server filtering rate = {:?}, receiver filtering rate = {:?}",
         0.5_f32.powf(n as f32),
         0.5_f32.powf(delta as f32)
     );
-    println!(
-        "\tGenerating secret and public FMD keys with {:?} subkeys...",
-        gamma
-    );
-    let (fmd_sk, fmd_pk) = multi_fmd2.generate_keys(&mut csprng);
-
-    println!("\tExtracting {:?} detection keys (one per server)...", d);
-    let detection_keys = multi_fmd2.multi_extract(&fmd_sk, d, t, n, delta).unwrap();
 
     println!("[Sender side]");
-    let mut storage_pool = vec![];
 
     println!("\tFlagging a message with the FMD public key...");
-    let flag = multi_fmd2.flag(&fmd_pk, &mut csprng);
+    let flag = multifmd2.flag(&fmd_pk, &mut csprng);
 
-    storage_pool.push(("shielded message for receiver".to_string(), flag));
+    let mut storage_pool = HashMap::new();
+    storage_pool.insert(0_u32, (flag, "shielded message for receiver".to_string()));
 
     println!("[Storage pool side]");
-    let stored_msgs = 1000;
+
+    let stored_msgs = 100;
     println!("\tIt has message/flag pairs for other receivers.");
     println!(
         "\tPopulating the pool with {:?} extra message/flag pairs. It may take sometime...",
         stored_msgs
     );
 
-    for i in 0..stored_msgs {
-        let (_, another_fmd_pk) = multi_fmd2.generate_keys(&mut csprng);
-        let another_flag = multi_fmd2.flag(&another_fmd_pk, &mut csprng);
+    for i in 1..stored_msgs {
+        let another_fmd_pk =
+            multifmd2.generate_public_key(&multifmd2.generate_secret_key(&mut csprng), &[1u8; 64]);
+        let another_flag = multifmd2.flag(&another_fmd_pk, &mut csprng);
 
-        storage_pool.push((
-            format!("shielded message for another receiver ({:?})", i),
-            another_flag,
-        ));
+        storage_pool.insert(
+            i,
+            (
+                another_flag,
+                format!("shielded message for another receiver ({:?})", i),
+            ),
+        );
     }
 
-    println!("[Detection server side ({:?} servers)]", d);
-    let mut all_filtered_messages = vec![];
+    println!(
+        "[Detection server side ({:?} servers)]",
+        num_servers.clone()
+    );
+    let mut all_detect_results = vec![];
     for (j, detection_key) in detection_keys.iter().enumerate() {
-        println!("\tFiltering messages in server {:?}...", j);
-        let mut filtered_messages = vec![];
-        for (message, flag) in storage_pool.iter() {
-            let is_positive = multi_fmd2.detect(detection_key, flag);
+        println!("\tRunning detection in server {:?}...", j);
+        let mut detect_results = HashMap::new();
+        let mut positive_flags = 0_u32;
+        for index in storage_pool.keys() {
+            let flag = storage_pool.get(index).unwrap().0.clone();
+            let is_positive = multifmd2.detect(&[detection_key.clone()], &flag).unwrap();
+            detect_results.insert(index, (flag, is_positive));
             if is_positive {
-                filtered_messages.push(message);
-            }
+                positive_flags += 1
+            };
         }
-        println!("\t\tFiltered messages: {:?}", filtered_messages.len());
-        all_filtered_messages.push(filtered_messages);
+        println!("\t\tNumber of positive flags: {:?}", positive_flags);
+
+        all_detect_results.push(detect_results);
     }
 
     println!("[Receiver side]");
-    println!("\tCombining messages from the {:?} detection servers...", d);
+    println!(
+        "\tCombining results from the {:?} detection servers...",
+        num_servers
+    );
 
-    let combined_messages = FilterCombiner::combine(&all_filtered_messages);
+    let mut receiver_positive_indices = vec![];
+
+    for index in storage_pool.keys() {
+        let mut results_for_flag = vec![];
+        for server_results in all_detect_results.clone() {
+            results_for_flag.push(server_results.get(index).unwrap().1);
+        }
+        let receiver_result = multifmd2.combine(&results_for_flag);
+
+        if receiver_result {
+            receiver_positive_indices.push(index);
+        }
+    }
+
     println!(
         "\t\tSize of combined shielded messages: {:?}",
-        combined_messages.len()
+        receiver_positive_indices.len()
     );
-    println!("\tNow you can run trial-decryption on the combined shielded messages.");
+    println!("\tNow you can retrieve the messages and run trial-decryption on them.");
 }

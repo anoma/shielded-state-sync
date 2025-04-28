@@ -1,4 +1,4 @@
-ALL_FEATURES := serde
+ALL_FEATURES := 'serde,sha2/force-soft,combine'
 
 .PHONY: all
 all: clippy-no-std-all-features
@@ -33,4 +33,8 @@ test:
 
 .PHONY: bench
 bench:
-	cargo bench
+	cargo bench --features combine
+
+.PHONY: example
+example:
+	cargo run --features combine --example basic

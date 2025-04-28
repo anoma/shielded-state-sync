@@ -13,7 +13,7 @@ use crate::{
     fmd2_generic::{
         ChamaleonHashBasepoint, CiphertextBits, GenericFlagCiphertexts, GenericFmdPublicKey,
     },
-    DetectionKey, FmdKeyGen, FmdSecretKey, MultiFmdScheme,
+    DetectionKey, FmdKeyGen, FmdSecretKey, MultiFmdScheme, MultiKeyFmd,
 };
 
 #[derive(Debug, Clone)]
@@ -58,16 +58,28 @@ impl From<GenericFlagCiphertexts> for FlagCiphertexts {
     }
 }
 
+/// The set of allowed rate functions.
+// They are parameterized by the leaked rate `n`.
+pub struct RateFunction {
+    n: usize,
+}
+
+impl RateFunction {
+    pub fn is_valid(number_keys: usize, threshold: usize) -> bool {
+        todo!()
+    }
+}
+
 /// The multi-key scheme.
 #[derive(Debug, Clone)]
-pub struct Fmd2MultikeyScheme {
+pub struct MultiFmd2 {
     gamma: usize,
 }
 
-impl Fmd2MultikeyScheme {
+impl MultiFmd2 {
     /// The set of (restricted) false positive rates is 2^{-n} for 1 ≤ n ≤ γ.  
-    pub fn new(gamma: usize) -> Fmd2MultikeyScheme {
-        Fmd2MultikeyScheme { gamma }
+    pub fn new(gamma: usize) -> MultiFmd2 {
+        MultiFmd2 { gamma }
     }
 
     /// Returns the γ parameter
@@ -76,7 +88,7 @@ impl Fmd2MultikeyScheme {
     }
 }
 
-impl FmdKeyGen<FmdSecretKey, FmdPublicKey> for Fmd2MultikeyScheme {
+impl FmdKeyGen<FmdSecretKey, FmdPublicKey> for MultiFmd2 {
     /// Generates as many subkeys as the γ parameter of `self`.
     fn generate_keys<R: RngCore + CryptoRng>(&self, rng: &mut R) -> (FmdSecretKey, FmdPublicKey) {
         let gamma = self.gamma();
@@ -91,7 +103,7 @@ impl FmdKeyGen<FmdSecretKey, FmdPublicKey> for Fmd2MultikeyScheme {
     }
 }
 
-impl MultiFmdScheme<FmdPublicKey, FlagCiphertexts> for Fmd2MultikeyScheme {
+impl MultiFmdScheme<FmdPublicKey, FlagCiphertexts> for MultiFmd2 {
     fn flag<R: RngCore + CryptoRng>(
         &mut self,
         public_key: &FmdPublicKey,
@@ -114,5 +126,47 @@ impl MultiFmdScheme<FmdPublicKey, FlagCiphertexts> for Fmd2MultikeyScheme {
         );
 
         detection_key.detect(&mut CiphertextBits::new(), &gfc)
+    }
+}
+
+impl MultiKeyFmd for MultiFmd2 {
+    type SecretKey = crate::fmd2_generic::FmdSecretKey;
+
+    type PublicKey = FmdPublicKey;
+
+    type DetectionKey = crate::fmd2_generic::DetectionKey;
+
+    type RateFunction = RateFunction;
+
+    type Flag = FlagCiphertexts;
+
+    type TestResult = crate::fmd2_generic::TestResult;
+
+    fn generate_secret_key(threshold: usize) -> Self::SecretKey {
+        todo!()
+    }
+
+    fn generate_public_key(sk: &Self::SecretKey, address_tag: &[u8]) -> Self::PublicKey {
+        todo!()
+    }
+
+    fn extract(
+        sk: &Self::SecretKey,
+        number_keys: usize,
+        rate: &Self::RateFunction,
+    ) -> Vec<DetectionKey> {
+        todo!()
+    }
+
+    fn flag(pk: &Self::PublicKey) -> Self::Flag {
+        todo!()
+    }
+
+    fn test(detection_keys: &[Self::DetectionKey], flag: Self::Flag) -> Self::TestResult {
+        todo!()
+    }
+
+    fn combine(results: &[Self::TestResult]) -> Self::TestResult {
+        todo!()
     }
 }

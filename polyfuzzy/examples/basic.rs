@@ -1,6 +1,6 @@
 // Run with `cargo run --example basic`
 
-use polyfuzzy::{fmd2::Fmd2MultikeyScheme, FilterCombiner, FmdKeyGen, MultiFmdScheme};
+use polyfuzzy::{fmd2::MultiFmd2, FilterCombiner, FmdKeyGen, MultiFmdScheme};
 
 fn main() {
     let mut csprng = rand_core::OsRng;
@@ -13,7 +13,7 @@ fn main() {
     let delta = n + (d - t) * n / t; // filtering_rate = 2^{-delta}
 
     // Basic multi-key FMD scheme
-    let mut multi_fmd2 = Fmd2MultikeyScheme::new(gamma);
+    let mut multi_fmd2 = MultiFmd2::new(gamma);
 
     println!("\nGLOBAL PARAMETERS");
     println!("-----------------");

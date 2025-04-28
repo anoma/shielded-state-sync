@@ -15,7 +15,7 @@ use crate::{
     fmd2_generic::{
         ChamaleonHashBasepoint, CiphertextBits, GenericFlagCiphertexts, GenericFmdPublicKey,
     },
-    FmdKeyGen, FmdSecretKey, KeyExpansion, KeyRandomization, MultiFmdScheme,
+    FmdKeyGen, FmdSecretKey, KeyExpansion, KeyRandomization, MultiFmdScheme, MultiKeyFmd,
 };
 
 /// A polynomial over the scalar field of Ristretto of degree = `t` (the threshold parameter).
@@ -117,14 +117,14 @@ struct ExpandedKeyCache {
 }
 
 impl ExpandedKeyCache {
-    fn new(scheme: &MultiFmd2CompactScheme, pk: &CompactPublicKey) -> Self {
+    fn new(scheme: &CompactMultiFmd2, pk: &CompactPublicKey) -> Self {
         Self {
             fingerprint: pk.fingerprint,
             randomized_key: scheme.expand_public_key(pk),
         }
     }
 
-    fn or_update(&mut self, scheme: &MultiFmd2CompactScheme, pk: &CompactPublicKey) -> &mut Self {
+    fn or_update(&mut self, scheme: &CompactMultiFmd2, pk: &CompactPublicKey) -> &mut Self {
         if self.fingerprint.ct_ne(&pk.fingerprint).into() {
             self.fingerprint = pk.fingerprint;
             self.randomized_key = scheme.expand_public_key(pk);
@@ -133,9 +133,21 @@ impl ExpandedKeyCache {
     }
 }
 
+/// The set of allowed rate functions.
+// They are parameterized by the leaked rate `n`.
+pub struct RateFunction {
+    n: usize,
+}
+
+impl RateFunction {
+    pub fn is_valid(number_keys: usize, threshold: usize) -> bool {
+        todo!()
+    }
+}
+
 /// The multi-key FMD scheme supporting key expansion and key randomization.
 #[derive(Debug, Clone)]
-pub struct MultiFmd2CompactScheme {
+pub struct CompactMultiFmd2 {
     /// The threshold parameter
     threshold: usize,
     ///the γ public scalars to derive keys from.
@@ -146,7 +158,7 @@ pub struct MultiFmd2CompactScheme {
     ciphertext_bits: CiphertextBits,
 }
 
-impl MultiFmd2CompactScheme {
+impl CompactMultiFmd2 {
     /// Public scalars default to 1,...,γ in Z_q.
     pub fn new(gamma: usize, threshold: usize) -> Self {
         let mut public_scalars = Vec::new();
@@ -156,7 +168,7 @@ impl MultiFmd2CompactScheme {
             public_scalars.push(scalar);
             scalar += Scalar::ONE;
         }
-        MultiFmd2CompactScheme {
+        CompactMultiFmd2 {
             threshold,
             public_scalars,
             expanded_pk: None,
@@ -165,7 +177,49 @@ impl MultiFmd2CompactScheme {
     }
 }
 
-impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
+impl MultiKeyFmd for CompactMultiFmd2 {
+    type SecretKey = CompactSecretKey;
+
+    type PublicKey = CompactPublicKey;
+
+    type DetectionKey = crate::fmd2_generic::DetectionKey;
+
+    type RateFunction = RateFunction;
+
+    type Flag = FlagCiphertexts;
+
+    type TestResult = crate::fmd2_generic::TestResult;
+
+    fn generate_secret_key(threshold: usize) -> Self::SecretKey {
+        todo!()
+    }
+
+    fn generate_public_key(sk: &Self::SecretKey, address_tag: &[u8]) -> Self::PublicKey {
+        todo!()
+    }
+
+    fn extract(
+        sk: &Self::SecretKey,
+        number_keys: usize,
+        rate: &Self::RateFunction,
+    ) -> Vec<crate::DetectionKey> {
+        todo!()
+    }
+
+    fn flag(pk: &Self::PublicKey) -> Self::Flag {
+        todo!()
+    }
+
+    fn test(detection_keys: &[Self::DetectionKey], flag: Self::Flag) -> Self::TestResult {
+        todo!()
+    }
+
+    fn combine(results: &[Self::TestResult]) -> Self::TestResult {
+        todo!()
+    }
+}
+
+impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for CompactMultiFmd2 {
     /// Public keys generated have basepoint hardcoded to Ristretto basepoint.
     /// Thus, the master or original public key (as opposed to diversified keys)
     fn generate_keys<R: rand_core::RngCore + rand_core::CryptoRng>(
@@ -184,7 +238,7 @@ impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
     }
 }
 
-impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for MultiFmd2CompactScheme {
+impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for CompactMultiFmd2 {
     fn flag<R: rand_core::RngCore + rand_core::CryptoRng>(
         &mut self,
         public_key: &CompactPublicKey,
@@ -225,7 +279,7 @@ impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for MultiFmd2CompactSchem
     }
 }
 
-impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd2CompactScheme {
+impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for CompactMultiFmd2 {
     fn expand_keypair(
         &self,
         parent_sk: &CompactSecretKey,
@@ -247,7 +301,7 @@ impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd
     }
 }
 
-impl KeyRandomization<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
+impl KeyRandomization<CompactSecretKey, CompactPublicKey> for CompactMultiFmd2 {
     fn randomize(&self, sk: &CompactSecretKey, tag: &[u8; 64]) -> CompactPublicKey {
         let encoded_polynomial = sk.0.encode_with_hashed_basepoint(tag);
 
@@ -259,14 +313,14 @@ impl KeyRandomization<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactSc
 mod tests {
     use sha2::{Digest, Sha512};
 
-    use super::{polynomial::encode_coefficients, MultiFmd2CompactScheme};
+    use super::{polynomial::encode_coefficients, CompactMultiFmd2};
     use crate::{FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme};
 
     #[test]
     fn test_flagging_with_different_pks_flushes_cache() {
         let mut csprng = rand_core::OsRng;
 
-        let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
+        let mut compact_multi_fmd2 = CompactMultiFmd2::new(10, 3);
 
         let (_, master_cpk_1) = compact_multi_fmd2.generate_keys(&mut csprng);
         let (_, master_cpk_2) = compact_multi_fmd2.generate_keys(&mut csprng);
@@ -295,7 +349,7 @@ mod tests {
     fn test_unique_flag_ciphertexts_for_same_pk() {
         let mut csprng = rand_core::OsRng;
 
-        let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
+        let mut compact_multi_fmd2 = CompactMultiFmd2::new(10, 3);
         let (_, master_cpk) = compact_multi_fmd2.generate_keys(&mut csprng);
 
         let flag_ciphers_1 = compact_multi_fmd2.flag(&master_cpk, &mut csprng);
@@ -311,7 +365,7 @@ mod tests {
     fn test_expand_is_correct() {
         let mut csprng = rand_core::OsRng;
 
-        let compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
+        let compact_multi_fmd2 = CompactMultiFmd2::new(10, 3);
         let (master_csk, master_cpk) = compact_multi_fmd2.generate_keys(&mut csprng);
 
         let (_fmd_sk, fmd_pk) = compact_multi_fmd2.expand_keypair(&master_csk, &master_cpk);
@@ -325,7 +379,7 @@ mod tests {
     fn test_expand_and_randomize_are_compatible() {
         let mut csprng = rand_core::OsRng;
 
-        let compact_multi_fmd2 = MultiFmd2CompactScheme::new(10, 3);
+        let compact_multi_fmd2 = CompactMultiFmd2::new(10, 3);
         let (master_csk, master_cpk) = compact_multi_fmd2.generate_keys(&mut csprng);
 
         // Randomize then expand.
@@ -345,7 +399,7 @@ mod tests {
 
         let gamma = 10;
 
-        let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(gamma, 3);
+        let mut compact_multi_fmd2 = CompactMultiFmd2::new(gamma, 3);
         let (master_csk, master_cpk) = compact_multi_fmd2.generate_keys(&mut csprng);
 
         // Expand onto the FMD secret key and extract a detection key.

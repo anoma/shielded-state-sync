@@ -1,6 +1,6 @@
 // Run with `cargo run --example compact`
 use polyfuzzy::{
-    fmd2_compact::MultiFmd2CompactScheme, FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme,
+    fmd2_compact::CompactMultiFmd2, FmdKeyGen, KeyExpansion, KeyRandomization, MultiFmdScheme,
 };
 use sha2::{Digest, Sha512};
 
@@ -15,7 +15,7 @@ fn main() {
     let delta = n + (d - t) * n / t; // filtering_rate = 2^{-delta}
 
     // Compact multi-key FMD scheme
-    let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(gamma, t);
+    let mut compact_multi_fmd2 = CompactMultiFmd2::new(gamma, t);
 
     println!("\nGLOBAL PARAMETERS");
     println!("-----------------");

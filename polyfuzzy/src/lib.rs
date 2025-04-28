@@ -10,9 +10,40 @@ pub mod fmd2;
 pub mod fmd2_compact;
 pub(crate) mod fmd2_generic;
 pub use crate::combiner::FilterCombiner;
-pub use crate::fmd2_generic::{DetectionKey, FmdSecretKey};
+pub use crate::fmd2_generic::{DetectionKey, FmdSecretKey, TestResult};
 
 /// A trait for a Fuzzy Message Detection (FMD) scheme with multi-key extraction.
+pub trait MultiKeyFmd {
+    type SecretKey;
+    type PublicKey;
+    type DetectionKey;
+    type RateFunction;
+    type Flag;
+    type TestResult: ValidResult;
+
+    fn generate_secret_key(threshold: usize) -> Self::SecretKey;
+
+    fn generate_public_key(sk: &Self::SecretKey, address_tag: &[u8]) -> Self::PublicKey;
+
+    fn extract(
+        sk: &Self::SecretKey,
+        number_keys: usize,
+        rate: &Self::RateFunction,
+    ) -> Vec<DetectionKey>;
+
+    fn flag(pk: &Self::PublicKey) -> Self::Flag;
+
+    fn test(detection_keys: &[Self::DetectionKey], flag: Self::Flag) -> Self::TestResult;
+
+    fn combine(results: &[Self::TestResult]) -> Self::TestResult;
+}
+
+/// Any result must signal whether the test is successfull or not.
+pub trait ValidResult {
+    fn is_valid(&self) -> bool;
+}
+
+/// This trait will be deprecated.
 pub trait MultiFmdScheme<PK, F> {
     fn flag<R: RngCore + CryptoRng>(&mut self, public_key: &PK, rng: &mut R) -> F;
 
@@ -33,36 +64,19 @@ pub trait MultiFmdScheme<PK, F> {
     fn detect(&mut self, detection_key: &DetectionKey, flag_ciphers: &F) -> bool;
 }
 
-/// A trait to generate the keypair of the FMD scheme.
-///
-/// Depending on implementations, the generated keypair can be compact.
+/// This trait will be deprecated.
 pub trait FmdKeyGen<SK, PK> {
     fn generate_keys<R: RngCore + CryptoRng>(&self, rng: &mut R) -> (SK, PK);
 }
 
-/// A trait to derive an FMD keypair ([FmdSecretKey],DPK) from a keypair (SK,PK).
+///  This trait will be deprecated.
 pub trait KeyExpansion<SK, PK, DPK>: FmdKeyGen<SK, PK> {
     fn expand_keypair(&self, parent_sk: &SK, parent_pk: &PK) -> (FmdSecretKey, DPK);
 
     fn expand_public_key(&self, parent_pk: &PK) -> DPK;
 }
 
-/// A trait to randomize public keys.
-///
-/// - Key expansion and key randomization are compatible if FMD secret keys
-///   of FMD public keys expanded from randomized compact keys are the same.
-//
-//   (sk1,pk1)----randomize----> pk2
-//      |                         |
-//      |                         |
-//  expand_keypair         expand_public_key
-//      |                         |
-//      |                         |
-//      \/                        \/
-//  (sk3,pk3)                    pk4 such that sk3 = secret_key(pk4)
-///
-/// - Key randomization must be unlinkable: it is not possible to tell whether any two public keys
-///   were randomized from the same input keypair.
+///  This trait will be deprecated.
 pub trait KeyRandomization<SK, PK> {
     /// The randomized public key is bound to the tag. Different tags yield
     /// different randomized public keys.

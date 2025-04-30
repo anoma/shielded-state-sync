@@ -11,6 +11,7 @@ edition = "2021"
 [features]
 serde = ["dep:serde", "curve25519-dalek/serde"]
 sha2-force-soft = ["sha2/force-soft"]
+random-flag-ciphertexts = []
 
 [dependencies]
 curve25519-dalek = { workspace = true, features = ["rand_core"] }

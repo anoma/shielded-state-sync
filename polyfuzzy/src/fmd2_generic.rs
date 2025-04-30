@@ -280,6 +280,42 @@ impl GenericFlagCiphertexts {
             c,
         }
     }
+
+    #[cfg(feature = "random-flag-ciphertexts")]
+    pub(crate) fn random<R>(rng: &mut R, gamma: usize) -> Self
+    where
+        R: rand_core::RngCore + rand_core::CryptoRng,
+    {
+        if gamma == 0 {
+            panic!("Gamma parameter cannot have a value of 0");
+        }
+
+        // Divide gamma by 8 and add any remaining bits which overflow
+        // to the next byte boundary. This yields the length of a bit
+        // ciphertext produced with a parameter of `gamma`.
+        let c_len = (gamma >> 3) + ((gamma % 8) != 0) as usize;
+
+        let mut c = CompressedCiphertextBits(alloc::vec![0u8; c_len]);
+
+        rng.fill_bytes(&mut c.0);
+
+        // Mask with the padding bits that should be set to 0 (or,
+        // in other words, unset) in the bit ciphertext. Since this
+        // library doesn't set any of the upper bits, if they have
+        // been set it means someone has tampered with the flag
+        // ciphertext. We comply with the behavior of the library
+        // by unsetting the upper bits.
+        let unset_bits_mask = !(0xff << (gamma % 8));
+
+        c.0[c_len - 1] &= unset_bits_mask;
+
+        Self {
+            basepoint_ch: RistrettoPoint::random(rng),
+            u: RistrettoPoint::random(rng),
+            y: Scalar::random(rng),
+            c,
+        }
+    }
 }
 
 // This is the hash H from Fig.3 of the FMD paper, instantiated with SHA256.

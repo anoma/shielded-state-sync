@@ -1,4 +1,4 @@
-ALL_FEATURES := serde
+ALL_FEATURES := serde,random-flag-ciphertexts
 
 .PHONY: all
 all: clippy-no-std-all-features

@@ -46,6 +46,18 @@ impl FlagCiphertexts {
     pub fn bits(&self) -> &[u8] {
         &self.c
     }
+
+    /// Create a bogus flag ciphertext.
+    ///
+    /// This may be useful if we are generating cover traffic.
+    #[inline]
+    #[cfg(feature = "random-flag-ciphertexts")]
+    pub fn random<R>(rng: &mut R, gamma: usize) -> Self
+    where
+        R: rand_core::RngCore + rand_core::CryptoRng,
+    {
+        GenericFlagCiphertexts::random(rng, gamma).into()
+    }
 }
 
 impl From<GenericFlagCiphertexts> for FlagCiphertexts {

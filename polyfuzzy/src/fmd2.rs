@@ -90,7 +90,10 @@ impl Fmd2MultikeyScheme {
 
 impl FmdKeyGen<FmdSecretKey, FmdPublicKey> for Fmd2MultikeyScheme {
     /// Generates as many subkeys as the γ parameter of `self`.
-    fn generate_keys<R: RngCore + CryptoRng>(&self, rng: &mut R) -> (FmdSecretKey, FmdPublicKey) {
+    fn generate_keys<R: RngCore + CryptoRng>(
+        &mut self,
+        rng: &mut R,
+    ) -> (FmdSecretKey, FmdPublicKey) {
         let gamma = self.gamma();
 
         // Secret key.

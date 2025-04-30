@@ -37,14 +37,14 @@ pub trait MultiFmdScheme<PK, F> {
 ///
 /// Depending on implementations, the generated keypair can be compact.
 pub trait FmdKeyGen<SK, PK> {
-    fn generate_keys<R: RngCore + CryptoRng>(&self, rng: &mut R) -> (SK, PK);
+    fn generate_keys<R: RngCore + CryptoRng>(&mut self, rng: &mut R) -> (SK, PK);
 }
 
 /// A trait to derive an FMD keypair ([FmdSecretKey],DPK) from a keypair (SK,PK).
 pub trait KeyExpansion<SK, PK, DPK>: FmdKeyGen<SK, PK> {
-    fn expand_keypair(&self, parent_sk: &SK, parent_pk: &PK) -> (FmdSecretKey, DPK);
+    fn expand_keypair(&mut self, parent_sk: &SK, parent_pk: &PK) -> (FmdSecretKey, DPK);
 
-    fn expand_public_key(&self, parent_pk: &PK) -> DPK;
+    fn expand_public_key(&mut self, parent_pk: &PK) -> DPK;
 }
 
 /// A trait to randomize public keys.
@@ -67,5 +67,5 @@ pub trait KeyRandomization<SK, PK> {
     /// The randomized public key is bound to the tag. Different tags yield
     /// different randomized public keys.
     /// The input tag _should_ be uniform (e.g. a hash digest).
-    fn randomize(&self, sk: &SK, tag: &[u8; 64]) -> PK;
+    fn randomize(&mut self, sk: &SK, tag: &[u8; 64]) -> PK;
 }

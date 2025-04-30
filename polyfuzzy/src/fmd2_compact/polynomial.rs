@@ -5,6 +5,7 @@ use curve25519_dalek::{RistrettoPoint, Scalar};
 use serde::{Deserialize, Serialize};
 
 /// A degree `t` polynomial p(X) in Z_q[X] given by its t+1 coefficients.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub(crate) struct Polynomial {
     coeffs: Vec<Scalar>,
@@ -12,7 +13,7 @@ pub(crate) struct Polynomial {
 
 /// A degree t polynomial encoded in the exponent of a Ristretto point
 /// given by its t+1 points.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct EncodedPolynomial {
     pub(crate) basepoint: RistrettoPoint,
     pub(crate) coeffs: Vec<RistrettoPoint>,
@@ -20,13 +21,14 @@ pub(crate) struct EncodedPolynomial {
 
 /// γ scalar evaluations of the polynomial p(X) at public scalars.
 /// result[i] = p(public_scalar[i])
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ScalarEvaluations {
     pub(crate) results: Vec<Scalar>,
 }
 
 /// γ point evaluations of the polynomial p(X) at public scalars.
 /// result[i] = p(public_scalar[i]) * basepoint
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PointEvaluations {
     pub(crate) basepoint: RistrettoPoint,
     pub(crate) results: Vec<RistrettoPoint>,

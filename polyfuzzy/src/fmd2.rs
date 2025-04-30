@@ -16,7 +16,7 @@ use crate::{
     DetectionKey, FmdKeyGen, FmdSecretKey, MultiFmdScheme,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// γ public subkeys (points). The basepoint is hardcoded to the Ristretto basepoint.
 pub struct FmdPublicKey {
@@ -31,7 +31,7 @@ impl From<GenericFmdPublicKey> for FmdPublicKey {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A point `u`, a scalar `y`, and γ ciphertext bits `c`.
 pub struct FlagCiphertexts {
@@ -59,7 +59,7 @@ impl From<GenericFlagCiphertexts> for FlagCiphertexts {
 }
 
 /// The multi-key scheme.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Fmd2MultikeyScheme {
     gamma: usize,
 }

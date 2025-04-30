@@ -64,6 +64,28 @@ impl CiphertextBits {
 pub struct FmdSecretKey(#[cfg_attr(feature = "zeroize", zeroize)] pub(crate) Vec<Scalar>);
 
 impl FmdSecretKey {
+    /// Derive an [`FmdSecretKey`] from the given XOF stream.
+    pub fn derive_from_xof_stream<S>(gamma: usize, mut squeeze_stream: S) -> Self
+    where
+        S: FnMut(&mut [u8; 32]),
+    {
+        let mut scratch_buffer = [0u8; 32];
+
+        let keys = core::iter::repeat_with(|| {
+            squeeze_stream(&mut scratch_buffer);
+            Scalar::from_bytes_mod_order(scratch_buffer)
+        })
+        .take(gamma)
+        .collect();
+
+        #[cfg(feature = "zeroize")]
+        {
+            Zeroize::zeroize(&mut scratch_buffer);
+        }
+
+        Self(keys)
+    }
+
     pub(crate) fn generate_keys<R: RngCore + CryptoRng>(gamma: usize, rng: &mut R) -> Self {
         let keys = (0..gamma).map(|_| Scalar::random(rng)).collect();
 

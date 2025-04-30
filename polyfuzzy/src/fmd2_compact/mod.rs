@@ -7,7 +7,7 @@ use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, RistrettoPoint, Sca
 use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha256, Sha512};
 use subtle::ConstantTimeEq;
 #[cfg(feature = "zeroize")]
 use zeroize::Zeroize;
@@ -28,9 +28,24 @@ pub struct CompactSecretKey(#[cfg_attr(feature = "zeroize", zeroize)] Polynomial
 
 impl CompactSecretKey {
     /// Get the public key counterpart of this key
-    /// with standard basepoint
+    /// with standard basepoint.
     pub fn master_public_key(&self) -> CompactPublicKey {
         CompactPublicKey::from_poly(self.0.encode(&RISTRETTO_BASEPOINT_POINT))
+    }
+
+    /// Get the public key counterpart of this key
+    /// with a basepoint randomized by the given tag.
+    pub fn randomized_public_key(&self, tag: &[u8; 64]) -> CompactPublicKey {
+        CompactPublicKey::from_poly(self.0.encode_with_hashed_basepoint(tag))
+    }
+
+    /// Get the public key counterpart of this key
+    /// with a basepoint randomized by the given
+    /// variable length tag.
+    pub fn var_randomized_public_key(&self, tag: &[u8]) -> CompactPublicKey {
+        let mut digest = Sha512::new();
+        digest.update(tag);
+        self.randomized_public_key(&digest.finalize().into())
     }
 }
 
@@ -289,9 +304,7 @@ impl KeyExpansion<CompactSecretKey, CompactPublicKey, FmdPublicKey> for MultiFmd
 
 impl KeyRandomization<CompactSecretKey, CompactPublicKey> for MultiFmd2CompactScheme {
     fn randomize(&mut self, sk: &CompactSecretKey, tag: &[u8; 64]) -> CompactPublicKey {
-        let encoded_polynomial = sk.0.encode_with_hashed_basepoint(tag);
-
-        CompactPublicKey::from_poly(encoded_polynomial)
+        sk.randomized_public_key(tag)
     }
 }
 

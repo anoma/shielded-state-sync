@@ -3,11 +3,15 @@ use alloc::vec::Vec;
 use curve25519_dalek::{RistrettoPoint, Scalar};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "zeroize")]
+use zeroize::Zeroize;
 
 /// A degree `t` polynomial p(X) in Z_q[X] given by its t+1 coefficients.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 pub(crate) struct Polynomial {
+    #[cfg_attr(feature = "zeroize", zeroize)]
     coeffs: Vec<Scalar>,
 }
 
@@ -22,7 +26,9 @@ pub(crate) struct EncodedPolynomial {
 /// γ scalar evaluations of the polynomial p(X) at public scalars.
 /// result[i] = p(public_scalar[i])
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 pub(crate) struct ScalarEvaluations {
+    #[cfg_attr(feature = "zeroize", zeroize)]
     pub(crate) results: Vec<Scalar>,
 }
 

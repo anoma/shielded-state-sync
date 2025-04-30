@@ -12,6 +12,8 @@ use rand_core::{CryptoRng, RngCore};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha512};
+#[cfg(feature = "zeroize")]
+use zeroize::{Zeroize, Zeroizing};
 
 /// Compressed representation of the γ bit-ciphertexts of a [`GenericFlagCiphertexts`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -57,8 +59,9 @@ impl CiphertextBits {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 /// γ secret subkeys (scalars). For minimum false-positive rate p:=2^{-γ}.
-pub struct FmdSecretKey(pub(crate) Vec<Scalar>);
+pub struct FmdSecretKey(#[cfg_attr(feature = "zeroize", zeroize)] pub(crate) Vec<Scalar>);
 
 impl FmdSecretKey {
     pub(crate) fn generate_keys<R: RngCore + CryptoRng>(gamma: usize, rng: &mut R) -> Self {
@@ -137,9 +140,11 @@ impl FmdSecretKey {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 /// A subset of n-out-γ secret subkeys, and the positions
 /// they occupy in [FmdSecretKey].
 pub struct DetectionKey {
+    #[cfg_attr(feature = "zeroize", zeroize)]
     pub(crate) subkeys: Vec<Scalar>,
 
     pub(crate) indices: Vec<usize>,
@@ -200,16 +205,41 @@ pub(crate) struct GenericFmdPublicKey {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 pub(crate) struct ChamaleonHashBasepoint {
-    base: RistrettoPoint, // Basepoint for the Chamaleon Hash.
-    dlog: Scalar,         // Discrete log of `basepoint_ch` in base `GenericPublicKey.basepoint_eg`.
+    /// Basepoint for the Chamaleon Hash.
+    base: RistrettoPoint,
+    /// Discrete log of `basepoint_ch` in base `GenericPublicKey.basepoint_eg`.
+    #[cfg_attr(feature = "zeroize", zeroize)]
+    dlog: Scalar,
 }
 
+#[cfg(feature = "zeroize")]
+type NewChamaleonHashBasepoint = Zeroizing<ChamaleonHashBasepoint>;
+
+#[cfg(not(feature = "zeroize"))]
+type NewChamaleonHashBasepoint = ChamaleonHashBasepoint;
+
 impl ChamaleonHashBasepoint {
-    pub(crate) fn new(pk: &GenericFmdPublicKey, dlog: &Scalar) -> ChamaleonHashBasepoint {
-        ChamaleonHashBasepoint {
+    pub(crate) fn new<R: CryptoRng + RngCore>(
+        rng: &mut R,
+        pk: &GenericFmdPublicKey,
+    ) -> NewChamaleonHashBasepoint {
+        let dlog = Scalar::random(rng);
+
+        let hash = ChamaleonHashBasepoint {
             base: pk.basepoint_eg * dlog,
-            dlog: *dlog,
+            dlog,
+        };
+
+        #[cfg(feature = "zeroize")]
+        {
+            Zeroizing::new(hash)
+        }
+
+        #[cfg(not(feature = "zeroize"))]
+        {
+            hash
         }
     }
 }

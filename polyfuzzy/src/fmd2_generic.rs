@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha512};
 
 /// Compressed representation of the γ bit-ciphertexts of a [`GenericFlagCiphertexts`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub(crate) struct CompressedCiphertextBits(pub(crate) Vec<u8>);
 
@@ -31,7 +31,7 @@ impl CompressedCiphertextBits {
 }
 
 /// Decompressed inner bit-ciphertexts of a [`GenericFlagCiphertexts`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub(crate) struct CiphertextBits(pub(crate) Vec<bool>);
 
@@ -55,7 +55,7 @@ impl CiphertextBits {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// γ secret subkeys (scalars). For minimum false-positive rate p:=2^{-γ}.
 pub struct FmdSecretKey(pub(crate) Vec<Scalar>);
@@ -135,7 +135,7 @@ impl FmdSecretKey {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// A subset of n-out-γ secret subkeys, and the positions
 /// they occupy in [FmdSecretKey].
@@ -193,12 +193,13 @@ impl DetectionKey {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GenericFmdPublicKey {
     pub(crate) basepoint_eg: RistrettoPoint, // Basepoint to generate the DDH mask (for ElGamal).
     pub(crate) keys: Vec<RistrettoPoint>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ChamaleonHashBasepoint {
     base: RistrettoPoint, // Basepoint for the Chamaleon Hash.
     dlog: Scalar,         // Discrete log of `basepoint_ch` in base `GenericPublicKey.basepoint_eg`.
@@ -222,7 +223,7 @@ impl Default for ChamaleonHashBasepoint {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub(crate) struct GenericFlagCiphertexts {
     pub(crate) basepoint_ch: RistrettoPoint, // Basepoint for the Chamaleon Hash.

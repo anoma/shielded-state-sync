@@ -12,7 +12,7 @@ use zeroize::Zeroize;
 #[cfg_attr(feature = "zeroize", derive(Zeroize))]
 pub(crate) struct Polynomial {
     #[cfg_attr(feature = "zeroize", zeroize)]
-    coeffs: Vec<Scalar>,
+    pub(crate) coeffs: Vec<Scalar>,
 }
 
 /// A degree t polynomial encoded in the exponent of a Ristretto point

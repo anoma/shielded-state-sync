@@ -27,6 +27,30 @@ use crate::{
 pub struct CompactSecretKey(#[cfg_attr(feature = "zeroize", zeroize)] Polynomial);
 
 impl CompactSecretKey {
+    /// Derive a [`CompactSecretKey`] from the given XOF stream.
+    pub fn derive_from_xof_stream<S>(threshold: usize, mut squeeze_stream: S) -> Self
+    where
+        S: FnMut(&mut [u8; 32]),
+    {
+        let mut scratch_buffer = [0u8; 32];
+
+        let poly = Polynomial {
+            coeffs: core::iter::repeat_with(|| {
+                squeeze_stream(&mut scratch_buffer);
+                Scalar::from_bytes_mod_order(scratch_buffer)
+            })
+            .take(threshold + 1)
+            .collect(),
+        };
+
+        #[cfg(feature = "zeroize")]
+        {
+            Zeroize::zeroize(&mut scratch_buffer);
+        }
+
+        Self(poly)
+    }
+
     /// Get the public key counterpart of this key
     /// with standard basepoint.
     pub fn master_public_key(&self) -> CompactPublicKey {

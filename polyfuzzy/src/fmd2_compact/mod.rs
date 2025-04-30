@@ -9,6 +9,8 @@ use polynomial::{EncodedPolynomial, PointEvaluations, Polynomial};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
+#[cfg(feature = "zeroize")]
+use zeroize::Zeroize;
 
 mod polynomial;
 use crate::{
@@ -21,7 +23,8 @@ use crate::{
 /// A polynomial over the scalar field of Ristretto of degree = `t` (the threshold parameter).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct CompactSecretKey(Polynomial);
+#[cfg_attr(feature = "zeroize", derive(Zeroize))]
+pub struct CompactSecretKey(#[cfg_attr(feature = "zeroize", zeroize)] Polynomial);
 
 impl CompactSecretKey {
     /// Get the public key counterpart of this key
@@ -233,11 +236,10 @@ impl MultiFmdScheme<CompactPublicKey, FlagCiphertexts> for MultiFmd2CompactSchem
             basepoint_eg: expanded_pk_ref.randomized_key.0.basepoint,
             keys: expanded_pk_ref.randomized_key.0.results.clone(),
         };
-        let trapdoor = Scalar::random(rng);
 
         let flag = FlagCiphertexts(GenericFlagCiphertexts::generate_flag(
             &gpk,
-            &ChamaleonHashBasepoint::new(&gpk, &trapdoor),
+            &ChamaleonHashBasepoint::new(rng, &gpk),
             rng,
         ));
 

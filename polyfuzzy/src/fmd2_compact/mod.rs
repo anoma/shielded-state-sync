@@ -90,6 +90,11 @@ impl CompactPublicKey {
         }
     }
 
+    /// Return the threshold of this [`CompactPublicKey`].
+    pub fn threshold(&self) -> usize {
+        self.polynomial.coeffs.len() - 1
+    }
+
     fn from_poly(polynomial: EncodedPolynomial) -> Self {
         let fingerprint = {
             let mut hasher = Sha256::new();
@@ -128,6 +133,11 @@ impl CompressedCompactPublicKey {
             basepoint: RistrettoPoint::from_uniform_bytes(tag),
             coeffs: self.coeffs,
         })
+    }
+
+    /// Return the threshold of this [`CompressedCompactPublicKey`].
+    pub fn threshold(&self) -> usize {
+        self.coeffs.len() - 1
     }
 }
 
@@ -450,6 +460,18 @@ mod tests {
                 compact_multi_fmd2.detect(&dsk, &flag_ciphers_2)
             );
         }
+    }
+
+    #[test]
+    fn test_pubkey_thres() {
+        let mut csprng = rand_core::OsRng;
+
+        let gamma = 20;
+        let threshold = 1;
+        let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(gamma, threshold);
+
+        let (_, pk) = compact_multi_fmd2.generate_keys(&mut csprng);
+        assert_eq!(pk.threshold(), threshold);
     }
 
     fn hash_into_64_bytes(bytes: &[u8]) -> [u8; 64] {

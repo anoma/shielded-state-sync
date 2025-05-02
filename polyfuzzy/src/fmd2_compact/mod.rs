@@ -90,6 +90,11 @@ impl CompactPublicKey {
         }
     }
 
+    /// Return the threshold of this [`CompactPublicKey`].
+    pub fn threshold(&self) -> usize {
+        self.polynomial.coeffs.len() - 1
+    }
+
     fn from_poly(polynomial: EncodedPolynomial) -> Self {
         let fingerprint = {
             let mut hasher = Sha256::new();
@@ -128,6 +133,39 @@ impl CompressedCompactPublicKey {
             basepoint: RistrettoPoint::from_uniform_bytes(tag),
             coeffs: self.coeffs,
         })
+    }
+
+    /// Return the threshold of this [`CompressedCompactPublicKey`].
+    pub fn threshold(&self) -> usize {
+        self.coeffs.len() - 1
+    }
+
+    /// Return a compact byte representation of the coefficients
+    /// of this public key.
+    pub fn to_coeff_repr(&self) -> Vec<u8> {
+        self.coeffs
+            .iter()
+            .map(|coeff| coeff.compress().0)
+            .collect::<Vec<_>>()
+            .into_flattened()
+    }
+
+    /// Parse a compact byte representation of the polynomial coefficients
+    /// of a public key.
+    pub fn from_coeff_repr(repr: &[u8]) -> Option<Self> {
+        if repr.len() % 32 != 0 {
+            return None;
+        }
+
+        let mut buf = [0u8; 32];
+
+        repr.chunks(32)
+            .map(|chunk| {
+                buf.copy_from_slice(chunk);
+                curve25519_dalek::ristretto::CompressedRistretto(buf).decompress()
+            })
+            .collect::<Option<Vec<_>>>()
+            .map(|coeffs| Self { coeffs })
     }
 }
 
@@ -450,6 +488,18 @@ mod tests {
                 compact_multi_fmd2.detect(&dsk, &flag_ciphers_2)
             );
         }
+    }
+
+    #[test]
+    fn test_pubkey_thres() {
+        let mut csprng = rand_core::OsRng;
+
+        let gamma = 20;
+        let threshold = 1;
+        let mut compact_multi_fmd2 = MultiFmd2CompactScheme::new(gamma, threshold);
+
+        let (_, pk) = compact_multi_fmd2.generate_keys(&mut csprng);
+        assert_eq!(pk.threshold(), threshold);
     }
 
     fn hash_into_64_bytes(bytes: &[u8]) -> [u8; 64] {

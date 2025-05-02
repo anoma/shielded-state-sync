@@ -139,6 +139,34 @@ impl CompressedCompactPublicKey {
     pub fn threshold(&self) -> usize {
         self.coeffs.len() - 1
     }
+
+    /// Return a compact byte representation of the coefficients
+    /// of this public key.
+    pub fn to_coeff_repr(&self) -> Vec<u8> {
+        self.coeffs
+            .iter()
+            .map(|coeff| coeff.compress().0)
+            .collect::<Vec<_>>()
+            .into_flattened()
+    }
+
+    /// Parse a compact byte representation of the polynomial coefficients
+    /// of a public key.
+    pub fn from_coeff_repr(repr: &[u8]) -> Option<Self> {
+        if repr.len() % 32 != 0 {
+            return None;
+        }
+
+        let mut buf = [0u8; 32];
+
+        repr.chunks(32)
+            .map(|chunk| {
+                buf.copy_from_slice(chunk);
+                curve25519_dalek::ristretto::CompressedRistretto(buf).decompress()
+            })
+            .collect::<Option<Vec<_>>>()
+            .map(|coeffs| Self { coeffs })
+    }
 }
 
 /// The evaluations of the secret polynomial

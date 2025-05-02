@@ -135,6 +135,13 @@ impl CompressedCompactPublicKey {
         })
     }
 
+    /// Decompress this key by deriving a new basepoint from the given variable length tag.
+    pub fn var_decompress(self, tag: &[u8]) -> CompactPublicKey {
+        let mut digest = Sha512::new();
+        digest.update(tag);
+        self.decompress(&digest.finalize().into())
+    }
+
     /// Return the threshold of this [`CompressedCompactPublicKey`].
     pub fn threshold(&self) -> usize {
         self.coeffs.len() - 1

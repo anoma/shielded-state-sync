@@ -9,8 +9,10 @@ pub(crate) mod combiner;
 pub mod fmd2;
 pub mod fmd2_compact;
 pub(crate) mod fmd2_generic;
+pub mod multifmd1;
+mod structs;
 pub use crate::combiner::FilterCombiner;
-pub use crate::fmd2_generic::{DetectionKey, FmdSecretKey, TestResult};
+pub use crate::fmd2_generic::{DetectionKey, FmdSecretKey};
 
 /// A trait for a Fuzzy Message Detection (FMD) scheme with multi-key extraction.
 pub trait MultiKeyFmd {
@@ -19,28 +21,33 @@ pub trait MultiKeyFmd {
     type DetectionKey;
     type RateFunction;
     type Flag;
-    type TestResult: ValidResult;
+    type TestResult;
 
-    fn generate_secret_key(threshold: usize) -> Self::SecretKey;
+    fn generate_secret_key<R: RngCore + CryptoRng>(&self, rng: &mut R) -> Self::SecretKey;
 
-    fn generate_public_key(sk: &Self::SecretKey, address_tag: &[u8]) -> Self::PublicKey;
+    fn generate_public_key(&self, sk: &Self::SecretKey, address_tag: &[u8; 64]) -> Self::PublicKey;
 
     fn extract(
+        &self,
         sk: &Self::SecretKey,
-        number_keys: usize,
+        corruption_threshold: usize,
         rate: &Self::RateFunction,
-    ) -> Vec<DetectionKey>;
+    ) -> Option<Vec<Self::DetectionKey>>;
 
-    fn flag(pk: &Self::PublicKey) -> Self::Flag;
+    fn flag<R: RngCore + CryptoRng>(&self, pk: &Self::PublicKey, rng: &mut R) -> Self::Flag;
 
-    fn test(detection_keys: &[Self::DetectionKey], flag: Self::Flag) -> Self::TestResult;
-
-    fn combine(results: &[Self::TestResult]) -> Self::TestResult;
+    fn detect(
+        &self,
+        detection_keys: &[Self::DetectionKey],
+        flag: Self::Flag,
+    ) -> Option<Self::TestResult>;
 }
 
-/// Any result must signal whether the test is successfull or not.
-pub trait ValidResult {
-    fn is_valid(&self) -> bool;
+/// Optional trait. How exactly tests are combined might depend on
+/// specifics of the application.
+pub trait CombineTests {
+    type TestResult;
+    fn combine(&self, results: &[Self::TestResult]) -> bool;
 }
 
 /// This trait will be deprecated.

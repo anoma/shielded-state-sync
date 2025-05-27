@@ -13,8 +13,6 @@ use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha512};
 
-use crate::ValidResult;
-
 /// Compressed representation of the γ bit-ciphertexts of a [`GenericFlagCiphertexts`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -192,20 +190,6 @@ impl DetectionKey {
         }
 
         success == 1u8
-    }
-}
-
-/// The result of a test.
-// A test result is a pair formed by the index of the flag in the storage pool,
-// and the result of testing the flag.
-pub struct TestResult {
-    index_flag: usize,
-    result: bool,
-}
-
-impl ValidResult for TestResult {
-    fn is_valid(&self) -> bool {
-        self.result
     }
 }
 

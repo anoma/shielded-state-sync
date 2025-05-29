@@ -177,48 +177,6 @@ impl CompactMultiFmd2 {
     }
 }
 
-impl MultiKeyFmd for CompactMultiFmd2 {
-    type SecretKey = CompactSecretKey;
-
-    type PublicKey = CompactPublicKey;
-
-    type DetectionKey = crate::fmd2_generic::DetectionKey;
-
-    type RateFunction = RateFunction;
-
-    type Flag = FlagCiphertexts;
-
-    type TestResult = crate::fmd2_generic::TestResult;
-
-    fn generate_secret_key(threshold: usize) -> Self::SecretKey {
-        todo!()
-    }
-
-    fn generate_public_key(sk: &Self::SecretKey, address_tag: &[u8]) -> Self::PublicKey {
-        todo!()
-    }
-
-    fn extract(
-        sk: &Self::SecretKey,
-        number_keys: usize,
-        rate: &Self::RateFunction,
-    ) -> Vec<crate::DetectionKey> {
-        todo!()
-    }
-
-    fn flag(pk: &Self::PublicKey) -> Self::Flag {
-        todo!()
-    }
-
-    fn test(detection_keys: &[Self::DetectionKey], flag: Self::Flag) -> Self::TestResult {
-        todo!()
-    }
-
-    fn combine(results: &[Self::TestResult]) -> Self::TestResult {
-        todo!()
-    }
-}
-
 impl FmdKeyGen<CompactSecretKey, CompactPublicKey> for CompactMultiFmd2 {
     /// Public keys generated have basepoint hardcoded to Ristretto basepoint.
     /// Thus, the master or original public key (as opposed to diversified keys)

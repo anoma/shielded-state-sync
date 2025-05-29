@@ -6,6 +6,7 @@ use alloc::vec::Vec;
 use rand_core::{CryptoRng, RngCore};
 
 pub(crate) mod combiner;
+pub mod compact;
 pub mod fmd2;
 pub mod fmd2_compact;
 pub(crate) mod fmd2_generic;
@@ -34,10 +35,10 @@ pub trait MultiKeyFmd {
         rate: &Self::RateFunction,
     ) -> Option<Vec<Self::DetectionKey>>;
 
-    fn flag<R: RngCore + CryptoRng>(&self, pk: &Self::PublicKey, rng: &mut R) -> Self::Flag;
+    fn flag<R: RngCore + CryptoRng>(&mut self, pk: &Self::PublicKey, rng: &mut R) -> Self::Flag;
 
     fn detect(
-        &self,
+        &mut self,
         detection_keys: &[Self::DetectionKey],
         flag: Self::Flag,
     ) -> Option<Self::TestResult>;

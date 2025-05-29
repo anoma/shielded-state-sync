@@ -157,8 +157,76 @@ impl ExpandedSecretKey {
     }
 }
 
+/// A short FMD secret key used in [crate::compact::Polyfuzzy].
+pub struct CompactSecretKey(pub(crate) SecretKey);
+
+impl CompactSecretKey {
+    pub(crate) fn scalars(&self) -> Vec<Scalar> {
+        self.0 .0.clone()
+    }
+}
+
 /// A long FMD public key used in [crate::multifmd1::MultiFmd1] and multifmd2.
+#[derive(PartialEq, Debug, Clone)]
 pub struct ExpandedPublicKey(pub(crate) PublicKey);
+
+/// A short FMD public key used in [crate::compact::Polyfuzzy]
+#[derive(Debug, Clone)]
+pub struct CompactPublicKey {
+    pub(crate) fingerprint: [u8; 20],
+    pub(crate) pk: PublicKey,
+}
+
+impl CompactPublicKey {
+    /// Compress this key by dropping its basepoint.
+    pub fn compress(self) -> CompressedCompactPublicKey {
+        CompressedCompactPublicKey {
+            points_h: self.pk.points_h,
+        }
+    }
+}
+
+impl From<PublicKey> for CompactPublicKey {
+    fn from(value: PublicKey) -> Self {
+        let fingerprint = {
+            let mut hasher = Sha256::new();
+
+            hasher.update(value.tagged_basepoint.compress().0);
+
+            for h in value.points_h.iter() {
+                hasher.update(h.compress().0);
+            }
+
+            let hash: [u8; 32] = hasher.finalize().into();
+            let mut fingerprint = [0; 20];
+
+            fingerprint.copy_from_slice(&hash[..20]);
+            fingerprint
+        };
+
+        CompactPublicKey {
+            fingerprint,
+            pk: value,
+        }
+    }
+}
+/// A compressed representation of [CompactPublicKey] that drops the basepoint.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone)]
+pub struct CompressedCompactPublicKey {
+    pub(crate) points_h: Vec<RistrettoPoint>,
+}
+
+impl CompressedCompactPublicKey {
+    /// Decompress this key by deriving a new basepoint from the given tag.
+    pub fn decompress(self, address_tag: &[u8; 64]) -> CompactPublicKey {
+        PublicKey {
+            tagged_basepoint: RistrettoPoint::from_uniform_bytes(address_tag),
+            points_h: self.points_h,
+        }
+        .into()
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -226,7 +294,7 @@ impl RateFunction {
     }
 }
 
-// Compact or expanded secret keys are a vector x of scalars.
+/// Compact or expanded secret keys are a vector x of scalars.
 pub(crate) struct SecretKey(pub(crate) Vec<Scalar>);
 
 impl SecretKey {
@@ -246,10 +314,11 @@ impl SecretKey {
     }
 }
 
-// Compact or expanded public keys consist of a tagged basepoint and a vector H of points.
+/// Compact or expanded public keys consist of a tagged basepoint and a vector H of points.
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) struct PublicKey {
-    tagged_basepoint: RistrettoPoint, // Basepoint
-    points_h: Vec<RistrettoPoint>,
+    pub(crate) tagged_basepoint: RistrettoPoint, // Basepoint
+    pub(crate) points_h: Vec<RistrettoPoint>,
 }
 
 /// Compressed representation of the γ bit-ciphertexts of a [`ShortFlag`].

@@ -63,11 +63,15 @@ impl MultiKeyFmd for MultiFmd1 {
         )
     }
 
-    fn flag<R: RngCore + CryptoRng>(&self, pk: &ExpandedPublicKey, rng: &mut R) -> ShortFlag {
+    fn flag<R: RngCore + CryptoRng>(&mut self, pk: &ExpandedPublicKey, rng: &mut R) -> ShortFlag {
         ShortFlag::generate_flag(pk, rng)
     }
 
-    fn detect(&self, detection_keys: &[DetectionKey], flag: ShortFlag) -> Option<Self::TestResult> {
+    fn detect(
+        &mut self,
+        detection_keys: &[DetectionKey],
+        flag: ShortFlag,
+    ) -> Option<Self::TestResult> {
         let flattened_dsk = DetectionKey::flatten(detection_keys)?;
 
         Some(flattened_dsk.detect_short_flag(&mut crate::structs::CiphertextBits::new(), &flag))

@@ -1,6 +1,6 @@
 [package]
 name = "polyfuzzy"
-version = "0.1.0"
+version = "1.0.0"
 description = "Multi-key fuzzy message detection"
 license = "MIT"
 homepage = "https://github.com/anoma/shielded-state-sync"
